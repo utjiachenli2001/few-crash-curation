@@ -977,62 +977,29 @@ else:
         if not ok:
             BAD.append("sec:local " + where)
 
-print("== Introduction, safe completion (Section sec:main), and the numbers Section sec:assumptions repeats")
+print("== Introduction, and the numbers Section sec:assumptions repeats (the safe-completion paragraph and the practice item are checked above)")
 PP = D["prop50j8"]
 f1 = lambda x: f"{x:.1f}"
-mm = lambda k, key: [R[(k, b)][key] for b, _ in BENCH]
-L2S = ("l2rw", "l2rw_la")
-r2f = lambda v: rng_(v, 2)
 m = [re.search(txt(r"the planner crashes in ([\d.]+)\\% of dives. One crash dive, used by \\method\{\}, brings this to ([\d.]+)\\%, "
                    r"close to the ([\d.]+)\\% of a model trained without the faulty logs, while adding the same dive to training "
                    r"leaves ([\d.]+)\\%"), TEX),
-     re.search(txt(r"\\method\{\} completes about as many dives safely as the oracle on every fault \((\d+)--(\d+)\\% against "
-                   r"(\d+)--(\d+)\\%\)"), TEX),
-     re.search(txt(r"\(median final distance ([\d.]+)--([\d.]+)~m without a crash, against ([\d.]+)~m\) and completes fewer "
-                   r"\((\d+)--(\d+)\\%\), crashing in ([\d.]+)--([\d.]+)\\%"), TEX),
-     re.search(txt(r"clean set completes more \((\d+)--(\d+)\\%\), more even than the oracle, but on thrust gain it also crashes in "
-                   r"([\d.]+)--([\d.]+)\\% of dives, against ([\d.]+)\\%"), TEX),
-     re.search(txt(r"\(median final distance without a crash ([\d.]+)--([\d.]+)~m against ([\d.]+)~m; closest approach "
-                   r"([\d.]+)--([\d.]+)~m against ([\d.]+)--([\d.]+)~m\)"), TEX),
-     re.search(txt(r"Adding the crash dive completes (\d+)--(\d+)\\% of dives safely"), TEX),
-     re.search(txt(r"reweighting completed more dives safely on all three faults \((\d+)--(\d+)\\% against (\d+)--(\d+)\\%\)"), TEX),
      re.search(txt(r"Car: (\d+)--(\d+)\\% remains"), TEX),
      re.search(txt(r"(\d+)\\% of bad flights meet the margin condition"), TEX),
      re.search(txt(r"scalar part negative for (\d+)--(\d+)\\% of pairs"), TEX),
      re.search(txt(r"The sign rule still finds (\d+)--(\d+) of 32 at \+20\\%"), TEX),
      re.search(txt(r"keeping (\d+)--(\d+)\\% of the data \(Section~\\ref\{sec:local\}\)"), TEX)]
 if None in m:
-    print("  DIFF a sentence of the introduction, Section sec:main or Section sec:assumptions was not found in main.tex")
-    BAD.append("intro/safe/assumptions text")
+    print("  DIFF a sentence of the introduction or of Section sec:assumptions was not found in main.tex")
+    BAD.append("intro/assumptions text")
 else:
-    two = ("prop50j8", "gain40j8")  # "the two faults without look-alikes"
-    l2 = [R[(k, b)] for k in L2S for b, _ in BENCH]
     cells = [("intro: unfixed %", m[0].group(1), f1(PP["none"]["crash"])), ("intro: FACT %", m[0].group(2), f1(PP["sign1"]["crash"])),
              ("intro: oracle %", m[0].group(3), f1(PP["oracle"]["crash"])), ("intro: adding the dive %", m[0].group(4), f1(PP["add1"]["crash"])),
-             ("safe: FACT %", f"{m[1].group(1)}--{m[1].group(2)}", rng_(mm("fact", "safe"))),
-             ("safe: oracle %", f"{m[1].group(3)}--{m[1].group(4)}", rng_(mm("oracle", "safe"))),
-             ("safe: matched updates, final distance m", f"{m[2].group(1)}--{m[2].group(2)}",
-              r2f([R[("fact_matched", b)]["final"] for b in two])),
-             ("safe: oracle final distance m", m[2].group(3), r2f([R[("oracle", b)]["final"] for b in two])),
-             ("safe: matched updates, safe %", f"{m[2].group(4)}--{m[2].group(5)}", rng_(mm("fact_matched", "safe"))),
-             ("safe: matched updates, crash %", f"{m[2].group(6)}--{m[2].group(7)}", rng_(mm("fact_matched", "crash"), 1)),
-             ("safe: reweighting %", f"{m[3].group(1)}--{m[3].group(2)}", rng_([r["safe"] for r in l2])),
-             ("safe: reweighting on thrust gain, crash %", f"{m[3].group(3)}--{m[3].group(4)}",
-              rng_([R[(k, "gain40j8")]["crash"] for k in L2S], 1)),
-             ("safe: FACT on thrust gain, crash %", m[3].group(5), f1(R[("fact", "gain40j8")]["crash"])),
-             ("safe: reweighting final distance m", f"{m[4].group(1)}--{m[4].group(2)}", r2f([r["final"] for r in l2])),
-             ("safe: oracle final distance, all faults m", m[4].group(3), r2f(mm("oracle", "final"))),
-             ("safe: reweighting closest approach m", f"{m[4].group(4)}--{m[4].group(5)}", r2f([r["closest"] for r in l2])),
-             ("safe: oracle closest approach m", f"{m[4].group(6)}--{m[4].group(7)}", r2f(mm("oracle", "closest"))),
-             ("safe: adding the crash dive, safe %", f"{m[5].group(1)}--{m[5].group(2)}", rng_(mm("add", "safe"))),
-             ("practice: reweighting safe %", f"{m[6].group(1)}--{m[6].group(2)}", rng_([r["safe"] for r in l2])),
-             ("practice: FACT safe %", f"{m[6].group(3)}--{m[6].group(4)}", rng_(mm("fact", "safe"))),
-             ("assumptions: car error kept %", f"{m[7].group(1)}--{m[7].group(2)}", rng_(kept_err)),
-             ("assumptions: bad flights meeting the margin condition %", m[8].group(1), f"{pct('faulty', 'cert'):.0f}"),
-             ("assumptions: pairs with a negative scalar part %", f"{m[9].group(1)}--{m[9].group(2)}", rng_([100 * x for x in kneg])),
-             ("assumptions: bad flights found at +20%", f"{m[10].group(1)}--{m[10].group(2)}",
+             ("assumptions: car error kept %", f"{m[1].group(1)}--{m[1].group(2)}", rng_(kept_err)),
+             ("assumptions: bad flights meeting the margin condition %", m[2].group(1), f"{pct('faulty', 'cert'):.0f}"),
+             ("assumptions: pairs with a negative scalar part %", f"{m[3].group(1)}--{m[3].group(2)}", rng_([100 * x for x in kneg])),
+             ("assumptions: bad flights found at +20%", f"{m[4].group(1)}--{m[4].group(2)}",
               rng_([d["sign_bad"] for d in SW["sev20"]["det"]])),
-             ("assumptions: data kept after two failures %", f"{m[11].group(1)}--{m[11].group(2)}", rng_([100 * r["kept"] for r in r2]))]
+             ("assumptions: data kept after two failures %", f"{m[5].group(1)}--{m[5].group(2)}", rng_([100 * r["kept"] for r in r2]))]
     for where, p, data in cells:
         ok = p == data
         print(("  ok   " if ok else "  DIFF ") + f"{where}: paper {p} data {data}")
