@@ -68,7 +68,7 @@ ordinary training, and 27–31 s with learning to reweight implemented efficient
 | `code/mujoco/` | MuSHR car in MuJoCo with an icy corner: `env.py`, `core.py`, `attrlib.py`, log builders and experiments |
 | `code/crazyflie/` | Battery-sag fault in real NanoBench Crazyflie logs: `build_cf.py`, `cf.py`, `cf_table.py` and controls |
 | `results/` | The result JSON files behind every number in the paper, per platform |
-| `tests/` | Smoke tests that run the quadrotor and Crazyflie scripts on synthetic data and the car scripts on fewer logs |
+| `tests/` | Smoke tests that run the quadrotor and Crazyflie scripts on synthetic data and the car scripts on fewer logs, and a determinism test |
 
 ## Setup
 
@@ -155,8 +155,12 @@ first needs its faulty and oracle models: `python work/nat_probe.py <fault> <see
   `MUSHR_CARS=<mushr_mujoco_ros>/models/cars python tests/smoke_mujoco.py` does the same for the car (Table 8 and
   Section 7.8, with a few logs of each kind; MuJoCo too). They check that the code runs with the
   installed packages and writes results of the right shape, not the results themselves.
-- The number, table and figure checks run on every push and pull request (`.github/workflows/check.yml`), the smoke
-  tests when `code/`, `tests/` or `requirements.txt` change (`.github/workflows/smoke.yml`), and the paper build
+- `python tests/determinism.py` checks that runs are deterministic on one thread: it runs `prep`, `nat_probe` and
+  `mis_drone`, `build_cf` and `cf_table`, and (with `MUSHR_CARS`) `make_dry_logs` and `mj_major` twice each, made small
+  as above, and compares every result file (models tensor by tensor). About 5 minutes per platform.
+- The number, table and figure checks, and a check for undefined names, run on every push and pull request
+  (`.github/workflows/check.yml`); the smoke and determinism tests when `code/`, `tests/` or `requirements.txt` change
+  (`.github/workflows/smoke.yml`); and the paper build
   above, with a check for undefined references and citations and then `make_submission.py`, when `paper/` changes
   (`.github/workflows/paper.yml`, which keeps the PDF and `submission.zip` as an artifact of the run).
 - Build with `pdflatex main && bibtex main && pdflatex main && pdflatex main` in `paper/ras/` (TeX Live with the

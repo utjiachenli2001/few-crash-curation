@@ -34,21 +34,28 @@ def run(src, sub, make_data, boot, steps, env_extra=None, doc=""):
     args = parse_args(doc)
     tmp = args.keep or tempfile.mkdtemp(prefix="smoke_")
     try:
-        here = os.path.join(tmp, sub)
-        os.makedirs(here, exist_ok=True)
-        for f in os.listdir(src):
-            if f.endswith(".py"):
-                shutil.copy(os.path.join(src, f), here)
-        make_data(here)
-        failed = run_steps(steps, args, tmp, here, sub, boot, env_extra)
+        here = prepare(src, sub, make_data, tmp)
+        failed = run_steps(steps, args.only, tmp, here, sub, boot, env_extra)
     finally:
         if not args.keep:
             shutil.rmtree(tmp, ignore_errors=True)
     sys.exit(1 if failed else 0)
 
 
-def run_steps(steps, args, tmp, here, sub, boot, env_extra):
-    only = set(filter(None, args.only.split(",")))
+def prepare(src, sub, make_data, tmp):
+    """Copy the platform's scripts to tmp/sub and write the synthetic data there; returns tmp/sub."""
+    here = os.path.join(tmp, sub)
+    os.makedirs(here, exist_ok=True)
+    for f in os.listdir(src):
+        if f.endswith(".py"):
+            shutil.copy(os.path.join(src, f), here)
+    make_data(here)
+    return here
+
+
+def run_steps(steps, only, tmp, here, sub, boot, env_extra):
+    """Run the steps (or, if `only` names some, those and what they need) in tmp; returns the labels that failed."""
+    only = set(filter(None, only.split(",")))
     want = set()
     for name, _, _, needs in reversed(steps):  # a step and everything it needs
         if not only or name in only or name in want:

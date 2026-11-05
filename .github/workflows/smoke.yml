@@ -1,6 +1,7 @@
 # The experiment scripts run end to end, made small (tests/smoke_*.py): the quadrotor (the README's table, in two
-# parts) and the Crazyflie on synthetic flights, the MuJoCo car with fewer logs. A few minutes per platform, about 12
-# for drone_more, so only when the code, the tests or the pinned versions change, or by hand.
+# parts) and the Crazyflie on synthetic flights, the MuJoCo car with fewer logs; and tests/determinism.py runs part of
+# each twice and compares the results. A few minutes per job, about 12 for drone_more, so only when the code, the
+# tests or the pinned versions change, or by hand.
 name: smoke
 
 on:
@@ -15,11 +16,19 @@ permissions:
 
 jobs:
   smoke:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        platform: [drone, drone_more, crazyflie, mujoco]
+        include:
+          - {name: drone, run: tests/smoke_drone.py}
+          - {name: drone_more, run: tests/smoke_drone_more.py}
+          - {name: crazyflie, run: tests/smoke_crazyflie.py}
+          - {name: mujoco, run: tests/smoke_mujoco.py, mushr: true}
+          - {name: determinism drone, run: tests/determinism.py --only drone}
+          - {name: determinism crazyflie, run: tests/determinism.py --only crazyflie}
+          - {name: determinism mujoco, run: tests/determinism.py --only mujoco, mushr: true}
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -30,10 +39,10 @@ jobs:
           pip install $(grep -E '^torch==' requirements.txt) --index-url https://download.pytorch.org/whl/cpu
           pip install $(grep -E '^(numpy|scipy|scikit-learn|pandas|mujoco)==' requirements.txt)
       - name: MuSHR car model (prl-mushr/mushr_mujoco_ros, BSD-3), as the README describes
-        if: matrix.platform == 'mujoco'
+        if: matrix.mushr
         run: |
           git clone -q https://github.com/prl-mushr/mushr_mujoco_ros "$RUNNER_TEMP/mushr"
           git -C "$RUNNER_TEMP/mushr" checkout -q c86eef33dadb0e98fe916a55ac6aa1fc03af027e
           echo "MUSHR_CARS=$RUNNER_TEMP/mushr/models/cars" >> "$GITHUB_ENV"
-      - name: Run the ${{ matrix.platform }} scripts
-        run: python tests/smoke_${{ matrix.platform }}.py
+      - name: python ${{ matrix.run }}
+        run: python ${{ matrix.run }}
