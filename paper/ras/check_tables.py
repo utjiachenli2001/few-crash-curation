@@ -6,6 +6,8 @@ check_numbers.py recomputes the other tables and the text; this covers what the 
   Table tab:sweep  (6)  fill_sweep.py, which runs pool_sweep.py
   Table tab:local  (7)  fill_local.py
   pool_robust.json, pool_stress.json, pool_local_sev50_n11_on25-50.json and pooled_margin.txt (pool_margin.py)
+It also runs the README's other pooling scripts on the committed results (pool_quadrotor, pool_reach, pool_drone, and
+the Crazyflie's pool_eq and pool_cmp), which only have to run: check_numbers.py checks the numbers they pool.
 
 The scripts run unchanged in a temporary copy (they read and write work/), so nothing in the repository is touched.
 Needs NumPy only.
@@ -31,6 +33,12 @@ STEPS = [
     (["pool_stress.py"], "pool_stress.json", "pool_stress.json"),
     (["pool_local.py"], "pool_local_sev50_n11_on25-50.json", "pool_local_sev50_n11_on25-50.json"),
     (["pool_margin.py"], None, "pooled_margin.txt"),  # compared with the script's printout
+    # the README's other pooling scripts write nothing that is committed (check_numbers.py checks their numbers):
+    # they only have to run on the committed results
+    (["pool_quadrotor.py"], None, None),
+    (["pool_reach.py"], None, None),
+    (["pool_drone.py", "prop50mv", "lag100j8"], None, None),
+    (["pool_drone.py", "--base", "prop50mv", "lag100j8"], None, None),
     (["fill_robust.py", "main.tex"], None, None),
     (["fill_sweep.py", "main.tex"], None, None),
     (["fill_local.py", "main.tex"], None, None),
@@ -86,6 +94,17 @@ def main():
             print("  MISMATCH the fill scripts change paper/ras/main.tex:")
             show_diff(old, new, "paper/ras/main.tex", "after fill_*")
             bad.append("main.tex")
+        # the Crazyflie pooling scripts, run where cf_table.py writes (code/crazyflie/)
+        cf = os.path.join(tmp, "crazyflie")
+        shutil.copytree(os.path.join(ROOT, "results", "crazyflie"), cf)
+        for f in ("pool_eq.py", "pool_cmp.py"):
+            shutil.copy(os.path.join(ROOT, "code", "crazyflie", f), cf)
+        for args in (["pool_eq.py"], ["pool_eq.py", "--split"], ["pool_cmp.py"]):
+            p = subprocess.run([sys.executable] + args, cwd=cf, env=env, capture_output=True, text=True)
+            print(f"  {'ran ' if p.returncode == 0 else 'FAIL'} {' '.join(args)} (Crazyflie)")
+            if p.returncode != 0:
+                print(p.stderr)
+                bad.append(args[0])
     print()
     if bad:
         print("mismatches:", ", ".join(bad))
