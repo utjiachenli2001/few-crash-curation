@@ -22,6 +22,10 @@ jobs:
         run: pip install $(grep -E '^(numpy|scipy|matplotlib)==' requirements.txt)
       - name: Compile every script
         run: python -m compileall -q code paper tests
+      - name: No undefined names or other Pyflakes errors (unused imports are allowed)
+        run: |
+          pip install ruff==0.17.3
+          ruff check --no-cache --select F --ignore F401,F541 code paper tests
       - name: Paper numbers (Tables 1-4, 8, 9, Fig. 2 and the text)
         run: python paper/ras/check_numbers.py
       - name: Tables 5-7 and the pooled files
