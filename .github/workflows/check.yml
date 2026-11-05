@@ -1,4 +1,5 @@
-# Checks that need no raw data: every script compiles, and the paper's numbers match results/.
+# Checks that need no raw data: every script compiles, the paper's numbers, tables and figures match results/, and
+# the quadrotor and Crazyflie scripts run end to end on synthetic data.
 name: check
 
 on:
@@ -20,10 +21,26 @@ jobs:
       - name: Install NumPy, SciPy and Matplotlib at the versions in requirements.txt
         run: pip install $(grep -E '^(numpy|scipy|matplotlib)==' requirements.txt)
       - name: Compile every script
-        run: python -m compileall -q code paper
+        run: python -m compileall -q code paper tests
       - name: Paper numbers (Tables 1-4, 8, 9, Fig. 2 and the text)
         run: python paper/ras/check_numbers.py
       - name: Tables 5-7 and the pooled files
         run: python paper/ras/check_tables.py
       - name: Figures 2 and 3, byte for byte
         run: python paper/check_figs.py
+
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install CPU PyTorch and the packages the scripts import, at the versions in requirements.txt
+        run: |
+          pip install $(grep -E '^torch==' requirements.txt) --index-url https://download.pytorch.org/whl/cpu
+          pip install $(grep -E '^(numpy|scipy|scikit-learn)==' requirements.txt)
+      - name: Quadrotor scripts on synthetic data
+        run: python tests/smoke_drone.py
+      - name: Crazyflie scripts on synthetic data
+        run: python tests/smoke_crazyflie.py

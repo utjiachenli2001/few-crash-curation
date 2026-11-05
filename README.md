@@ -62,12 +62,13 @@ ordinary training, and 27–31 s with learning to reweight implemented efficient
 
 | Path | What |
 |---|---|
-| `paper/ras/` | `main.tex` (the paper, Elsevier `elsarticle` class), `highlights.txt`, `check_numbers.py` (recomputes the paper's numbers from `results/`), `make_submission.py` (assembles the upload files) |
-| `paper/` | `refs.bib`, `make_figs.py` and the figures it writes to `figs/` |
+| `paper/ras/` | `main.tex` (the paper, Elsevier `elsarticle` class), `highlights.txt`, `check_numbers.py` (recomputes the paper's numbers from `results/`), `check_tables.py` (reruns the scripts that write Tables 5–7), `make_submission.py` (assembles the upload files) |
+| `paper/` | `refs.bib`, `make_figs.py` and the figures it writes to `figs/`, `check_figs.py` (redraws them and compares) |
 | `code/drone/work/` | Quadrotor with a plant learned from NeuroBEM logs: `drone.py` (plant, model, MPPI, evaluation), `attr_data.py` (fault definitions), one script per experiment, and the `pool_*` and `fill_*` scripts that pool results into tables |
 | `code/mujoco/` | MuSHR car in MuJoCo with an icy corner: `env.py`, `core.py`, `attrlib.py`, log builders and experiments |
 | `code/crazyflie/` | Battery-sag fault in real NanoBench Crazyflie logs: `build_cf.py`, `cf.py`, `cf_table.py` and controls |
 | `results/` | The result JSON files behind every number in the paper, per platform |
+| `tests/` | Smoke tests that run the quadrotor and Crazyflie scripts on synthetic data |
 
 ## Setup
 
@@ -145,7 +146,12 @@ first needs its faulty and oracle models: `python work/nat_probe.py <fault> <see
 - `python paper/make_figs.py` redraws Figs. 2 and 3 from `results/`; Fig. 1 is drawn in the paper with TikZ.
   `python paper/check_figs.py` redraws them in a temporary copy and checks they match `paper/figs/` byte for byte
   (with the pinned Matplotlib).
-- These three checks run on every push and pull request (`.github/workflows/check.yml`).
+- `python tests/smoke_drone.py` and `python tests/smoke_crazyflie.py` run the quadrotor scripts (`nat_probe`, `mis`,
+  `sign3add`, `base`, `controls` and `reach` for every model) and the Crazyflie scripts (`cf_table`, `cf_extra`,
+  `cf_outfly`) end to end on small synthetic stand-ins for NeuroBEM and NanoBench, unchanged, with fewer MPPI rollouts
+  and dives (about 3 and 1.5 minutes on one CPU thread; PyTorch, scikit-learn and SciPy). They check that the code runs
+  with the installed packages and writes results of the right shape, not the results themselves.
+- These checks run on every push and pull request (`.github/workflows/check.yml`).
 - Build with `pdflatex main && bibtex main && pdflatex main && pdflatex main` in `paper/ras/` (TeX Live with the
   `elsarticle` class). Then `python3 make_submission.py` writes `paper/ras/submission/` (and `submission.zip`): the
   source with flat figure paths, `refs.bib` and `main.bbl`, each figure as its own file (`Figure_1.pdf` is the TikZ
