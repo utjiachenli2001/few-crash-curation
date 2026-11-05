@@ -18,6 +18,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Highlights as Elsevier asks (3 to 5, at most 85 characters each with spaces, after the "- " bullet)
+        working-directory: paper/ras
+        shell: python3 {0}
+        run: |
+          items = [l.rstrip("\n").removeprefix("- ") for l in open("highlights.txt") if l.strip()]
+          for h in items:
+              print(f"{len(h):3d}  {h}")
+          long = [h for h in items if len(h) > 85]
+          assert 3 <= len(items) <= 5, f"{len(items)} highlights"
+          assert not long, f"{len(long)} highlight(s) over 85 characters"
       - name: TeX Live with the elsarticle class
         run: |
           sudo apt-get update -qq
