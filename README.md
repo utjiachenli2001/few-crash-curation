@@ -146,14 +146,19 @@ first needs its faulty and oracle models: `python work/nat_probe.py <fault> <see
 - `python paper/make_figs.py` redraws Figs. 2 and 3 from `results/`; Fig. 1 is drawn in the paper with TikZ.
   `python paper/check_figs.py` redraws them in a temporary copy and checks they match `paper/figs/` byte for byte
   (with the pinned Matplotlib).
-- `python tests/smoke_drone.py` and `python tests/smoke_crazyflie.py` run the quadrotor scripts (`nat_probe`, `mis`,
-  `sign3add`, `base`, `controls` and `reach` for every model) and the Crazyflie scripts (`cf_table`, `cf_extra`,
-  `cf_outfly`) end to end on small synthetic stand-ins for NeuroBEM and NanoBench, unchanged, with fewer MPPI rollouts
-  and dives (about 3 and 1.5 minutes on one CPU thread; PyTorch, scikit-learn and SciPy). With the MuSHR model,
+- `python tests/smoke_drone.py` and `python tests/smoke_crazyflie.py` write a few synthetic flights in NeuroBEM's and
+  NanoBench's own formats and run, unchanged, `prep.py` and the quadrotor scripts (`nat_probe`, `mis`, `sign3add`,
+  `base`, `controls` and `reach` for every model), and `build_cf.py` and the Crazyflie scripts (`cf_table`, `cf_extra`,
+  `cf_outfly`), with fewer MPPI rollouts and dives (a few minutes each on one CPU thread; PyTorch, scikit-learn, SciPy
+  and pandas). `python tests/smoke_drone_more.py` runs every other quadrotor command in the table above the same way
+  (about 12 minutes). With the MuSHR model,
   `MUSHR_CARS=<mushr_mujoco_ros>/models/cars python tests/smoke_mujoco.py` does the same for the car (Table 8 and
-  Section 7.8, with a few logs of each kind; about 4 minutes; MuJoCo too). They check that the code runs with the
+  Section 7.8, with a few logs of each kind; MuJoCo too). They check that the code runs with the
   installed packages and writes results of the right shape, not the results themselves.
-- These checks run on every push and pull request (`.github/workflows/check.yml`).
+- The number, table and figure checks run on every push and pull request (`.github/workflows/check.yml`), the smoke
+  tests when `code/`, `tests/` or `requirements.txt` change (`.github/workflows/smoke.yml`), and the paper build
+  above, with a check for undefined references and citations and then `make_submission.py`, when `paper/` changes
+  (`.github/workflows/paper.yml`, which keeps the PDF and `submission.zip` as an artifact of the run).
 - Build with `pdflatex main && bibtex main && pdflatex main && pdflatex main` in `paper/ras/` (TeX Live with the
   `elsarticle` class). Then `python3 make_submission.py` writes `paper/ras/submission/` (and `submission.zip`): the
   source with flat figure paths, `refs.bib` and `main.bbl`, each figure as its own file (`Figure_1.pdf` is the TikZ

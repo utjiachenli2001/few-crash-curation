@@ -1,10 +1,11 @@
 """Smoke test of the Crazyflie scripts on synthetic data, without NanoBench.
 
-Writes a small synthetic stand-in for cf100.npz (24 flights with the columns build_cf.py writes; thrust per PWM grows
-with the battery voltage, and the flights' median voltages span 3.0-4.0 V, so most are above the 3.35 V threshold and
-are the "bad" logs for a 3.1 V deployment), copies code/crazyflie/ into a temporary folder and runs, unchanged and with
-CF_VOLTS=3.1 CF_EQ=1 as in the README:
+Writes small synthetic flights in NanoBench's format (one CSV per flight with the columns build_cf.py reads; 24
+flights whose thrust per PWM grows with the battery voltage, and whose median voltages span 3.0-4.0 V, so most are above
+the 3.35 V threshold and are the "bad" logs for a 3.1 V deployment), copies code/crazyflie/ into a temporary folder and
+runs, unchanged and with CF_VOLTS=3.1 CF_EQ=1 as in the README:
 
+  build_cf.py     the flights -> cf100.npz
   cf_table.py     the Table 9 rows: baselines, adding the crash dives, FACT, the oracle with the dives, L2RW
   cf_extra.py     other roll-ups, random removal
   cf_outfly.py    the gradient-free (output-space) score
@@ -24,7 +25,7 @@ from smoke_common import ROOT, expect, rates_ok, run
 
 SEED, K = "1", 6
 
-BOOT = r"""
+PATCH = """
 import torch
 import cf
 cf.K, cf.H = 32, 10                                    # MPPI rollouts and horizon
@@ -44,34 +45,44 @@ class Weak(torch.nn.Module):                           # 20% of the plant's thru
         return torch.cat([r[..., :2], r[..., 2:] - (1 - self.keep) * c[..., None]], -1) / cf.RS
 cf.PLANT = Weak(cf.PLANT, 0.2)
 """
+# cf.py loads cf100.npz on import, so build_cf.py, which writes it, runs without the patch
+BOOT = 'if os.path.basename(sys.argv[1]) != "build_cf.py":\n' + "".join("    " + x + "\n" for x in PATCH.strip().split("\n"))
+N_FLIGHTS, ROWS = 24, 340
+COLS = ["qx", "qy", "qz", "qw", "imu_acc_x", "imu_acc_y", "imu_acc_z", "vx", "vy", "vz", "wx_vicon", "wy_vicon",
+        "wz_vicon", "motor_motor_m1", "motor_motor_m2", "motor_motor_m3", "motor_motor_m4", "pwr_pm_vbat", "px", "py",
+        "pz"]
 
 
-def synthetic_cf100(folder, n_flights=24, rows=340, seed=0):
-    """cf100.npz with the arrays build_cf.py writes, from a made-up Crazyflie: body force 6.8 * (vbat / 3.7) *
-    sum(pwm^2) along the body z axis plus linear drag; each flight's battery sags by 0.2 V around its median."""
+def synthetic_nanobench(here, seed=0):
+    """NanoBench flights as build_cf.py reads them (nanobench/<flight>.csv), from a made-up Crazyflie: body force
+    6.8 * (vbat / 3.7) * sum(pwm^2) along the body z axis plus linear drag (the IMU logs it in g); each flight's battery
+    sags by 0.2 V around its median. Near-level attitude, airborne throughout."""
     rng = np.random.default_rng(seed)
-    cols = ["vel x", "vel y", "vel z", "ang vel x", "ang vel y", "ang vel z", "quat x", "quat y", "quat z", "quat w",
-            "pwm 1", "pwm 2", "pwm 3", "pwm 4", "acc x", "acc y", "acc z", "vbat", "pos x", "pos y", "pos z"]
-    v_med = rng.permutation(np.linspace(3.0, 4.0, n_flights))
-    t = np.arange(rows) * 0.01
-    data, flight, seg = [], [], []
-    for f in range(n_flights):
+    os.makedirs(os.path.join(here, "nanobench"))
+    v_med = rng.permutation(np.linspace(3.0, 4.0, N_FLIGHTS))
+    t = np.arange(ROWS) * 0.01
+    for f in range(N_FLIGHTS):
         ph = rng.uniform(0, 2 * np.pi, 7)
         v = 0.5 * np.stack([np.sin(0.7 * t + ph[0]), np.sin(0.5 * t + ph[1]), np.sin(0.9 * t + ph[2])], 1)
         w = 0.4 * np.stack([np.sin(1.3 * t + ph[3]), np.sin(1.1 * t + ph[4]), np.sin(0.8 * t + ph[5])], 1)
-        q = rng.normal(0, 0.05, (rows, 4)); q[:, 3] = 1.0
+        q = rng.normal(0, 0.05, (ROWS, 4)); q[:, 3] = 1.0
         q /= np.linalg.norm(q, axis=1, keepdims=True)
-        pwm = 0.6 + 0.12 * np.sin(1.5 * t[:, None] + ph[6] + np.arange(4)) + rng.normal(0, 0.01, (rows, 4))
-        vbat = v_med[f] + np.linspace(0.1, -0.1, rows)
+        pwm = 0.6 + 0.12 * np.sin(1.5 * t[:, None] + ph[6] + np.arange(4)) + rng.normal(0, 0.01, (ROWS, 4))
+        vbat = v_med[f] + np.linspace(0.1, -0.1, ROWS)
         c = 6.8 * vbat / 3.7 * (pwm ** 2).sum(1)
-        acc = np.stack([-0.35 * v[:, 0], -0.35 * v[:, 1], c - 0.25 * v[:, 2]], 1) + rng.normal(0, 0.2, (rows, 3))
-        pos = np.c_[np.zeros(rows), np.zeros(rows), np.full(rows, 1.0)]
-        data.append(np.c_[v, w, q, pwm, acc, vbat, pos])
-        flight.append(np.full(rows, f)); seg.append(np.full(rows, f * 1000 + 1))
-    flight = np.concatenate(flight)
-    np.savez(os.path.join(folder, "cf100.npz"), data=np.concatenate(data), cols=np.array(cols), flight=flight,
-             seg=np.concatenate(seg), flights=np.array([f"synthetic_{f:02d}" for f in range(n_flights)]),
-             test=np.isin(flight, [0, 1]))
+        acc = np.stack([-0.35 * v[:, 0], -0.35 * v[:, 1], c - 0.25 * v[:, 2]], 1) + rng.normal(0, 0.2, (ROWS, 3))
+        pos = np.c_[0.3 * np.sin(0.4 * t), 0.3 * np.cos(0.4 * t), 1.0 + 0.2 * np.sin(0.6 * t)]
+        np.savetxt(os.path.join(here, "nanobench", f"flight_{f:02d}.csv"),
+                   np.c_[q, acc / 9.81, v, w, pwm * 65535, vbat, pos], fmt="%.6g", delimiter=",",
+                   header=",".join(COLS), comments="")
+
+
+def check_build(here):
+    z = np.load(os.path.join(here, "cf100.npz"))
+    expect(len(z["flights"]) == N_FLIGHTS and len(z["data"]) == N_FLIGHTS * ROWS, f"{len(z['data'])} rows")
+    v = z["data"][:, list(z["cols"]).index("vbat")]
+    expect(2.85 < v.min() < 2.95 and 4.05 < v.max() < 4.15, f"voltages not carried over: {v.min():.2f}-{v.max():.2f}")
+    return f"{len(z['data'])} rows of {len(z['flights'])} flights"
 
 
 def rows(here):
@@ -99,11 +110,12 @@ EXTRA = [f"ours from 1 dives (worst 2 s), remove {K}", f"remove {K} random fligh
 OUTFLY = ["output-space from 1 dives, sign rule", "output-space from 3 dives, sign rule, and add them (W=20)"]
 ARGS = ["--seed", SEED, "--k", str(K)]
 STEPS = [
-    ("cf_table", ["cf_table.py", *ARGS], check(TABLE), []),
+    ("build_cf", ["build_cf.py", "nanobench"], check_build, []),
+    ("cf_table", ["cf_table.py", *ARGS], check(TABLE), ["build_cf"]),
     ("cf_extra", ["cf_extra.py", *ARGS], check(EXTRA), ["cf_table"]),
     ("cf_outfly", ["cf_outfly.py", *ARGS], check(OUTFLY), ["cf_table"]),
 ]
 
 if __name__ == "__main__":
-    run(os.path.join(ROOT, "code", "crazyflie"), ".", synthetic_cf100, BOOT, STEPS, {"CF_VOLTS": "3.1", "CF_EQ": "1"},
-        doc=__doc__)
+    run(os.path.join(ROOT, "code", "crazyflie"), ".", synthetic_nanobench, BOOT, STEPS,
+        {"CF_VOLTS": "3.1", "CF_EQ": "1"}, doc=__doc__)
