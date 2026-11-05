@@ -844,5 +844,54 @@ else:
         if not ok:
             BAD.append("sec:robust " + where)
 
+print("== A fault that starts mid-flight (text of Section sec:local), results/drone/local*_sev50_n11_on25-50_s*.json")
+LT = "sev50_n11_on25-50"
+ld = lambda pat: [json.load(open(f)) for f in sorted(glob.glob(os.path.join(RES, "drone", f"{pat}_{LT}_s[0-9].json")))]
+L_, Dg = ld("local"), ld("localdiag")
+It = ld("localiter")
+Nf = [json.load(open(f)) for f in sorted(glob.glob(os.path.join(RES, "drone", f"localiter_{LT}_s[0-9]_nofly.json")))]
+mse = lambda v: f"{np.mean(v):.1f}/{np.std(v, ddof=1) / np.sqrt(len(v)):.1f}"
+m = [re.search(txt(r"so that (\d+)\\% of their descent data is still correct"), TEX),
+     re.search(txt(r"the sign rule finds (\d+)--(\d+) of the 44 flights, two of five seeds crash in about (\d+)\\% of dives, and the "
+                   r"planner crashes in \\pmse\{([\d.]+)\}\{([\d.]+)\}\\% of dives on average \(unfixed (\d+)\\%\)"), TEX),
+     re.search(txt(r"locates the fault \(AUROC ([\d.]+)--([\d.]+) over windows with descent\) but still crashes in (\d+)\\% "
+                   r"\(single samples: (\d+)\\%\)"), TEX),
+     re.search(txt(r"even removing exactly the mostly-faulty windows crashes in (\d+)\\%"), TEX),
+     re.search(txt(r"it finds all (\d+) flights on every seed and crashes in \\pmse\{([\d.]+)\}\{([\d.]+)\}\\% \(flight oracle "
+                   r"([\d.]+)\\%\)"), TEX),
+     re.search(txt(r"plus (\d+)--(\d+) correct ones, and keeps (\d+)--(\d+)\\% of the data against (\d+)\\% for an oracle"), TEX)]
+if None in m or not (len(L_) == len(Dg) == len(It) == len(Nf) == 5):
+    print("  DIFF the sentences of Section sec:local or its five seeds of result files were not found")
+    BAD.append("sec:local text")
+else:
+    fl = lambda src, key: [crash_of(d["flown"][key]) for d in src]
+    one = fl(L_, "FACT flights")
+    high = [x for x in one if x > 50]
+    r1, r2 = [n["rounds"][0] for n in Nf], [n["rounds"][1] for n in Nf]
+    auroc = [d["detection"]["window_auroc_descent"] for d in L_]
+    cells = [("correct descent data in the faulty flights %", m[0].group(1),
+              rng_([100 * d["faulty_flights_descent_before_onset"] for d in L_])),
+             ("one failure: faulty flights found", f"{m[1].group(1)}--{m[1].group(2)}", rng_([r["bad_removed"] for r in r1])),
+             ("one failure: seeds crashing in about 80%", f"2 at {m[1].group(3)}",
+              f"{len(high)} at " + rng_([round(x, -1) for x in high])),
+             ("one failure: crash % (mean/s.e.)", f"{m[1].group(4)}/{m[1].group(5)}", mse(one)),
+             ("unfixed crash %", m[1].group(6), f"{np.mean(fl(L_, 'Unfixed')):.0f}"),
+             ("window AUROC over descent", f"{m[2].group(1)}--{m[2].group(2)}", rng_(auroc, 2)),
+             ("2-s windows, one failure, crash %", m[2].group(3), f"{np.mean(fl(L_, 'FACT windows')):.0f}"),
+             ("single samples, one failure, crash %", m[2].group(4), f"{np.mean(fl(L_, 'FACT samples')):.0f}"),
+             ("oracle windows, crash %", m[3].group(1), f"{np.mean(fl(Dg, 'Oracle windows')):.0f}"),
+             ("two failures: faulty flights found on every seed", m[4].group(1), rng_([r["bad_removed"] for r in r2])),
+             ("two failures: crash % (mean/s.e.)", f"{m[4].group(2)}/{m[4].group(3)}", mse([crash_of(d["rounds"][1]["flown"]) for d in It])),
+             ("flight oracle, crash %", m[4].group(4), f"{np.mean(fl(L_, 'Oracle flights')):.1f}"),
+             ("two failures: correct flights removed too", f"{m[5].group(1)}--{m[5].group(2)}",
+              rng_([r["removed"] - r["bad_removed"] for r in r2])),
+             ("two failures: data kept %", f"{m[5].group(3)}--{m[5].group(4)}", rng_([100 * r["kept"] for r in r2])),
+             ("sample oracle: data kept %", m[5].group(5), rng_([100 * d["removal"]["Oracle samples"]["kept"] for d in L_]))]
+    for where, p, data in cells:
+        ok = p == data
+        print(("  ok   " if ok else "  DIFF ") + f"sec:local {where}: paper {p} data {data}")
+        if not ok:
+            BAD.append("sec:local " + where)
+
 print("\n" +(f"{len(BAD)} MISMATCHES: " + ", ".join(BAD) if BAD else "all checked numbers match the result files"))
 sys.exit(1 if BAD else 0)  # non-zero on any mismatch, so CI fails
