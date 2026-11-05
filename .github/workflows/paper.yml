@@ -1,0 +1,45 @@
+# Build the paper as the README says, fail on LaTeX errors and on undefined references or citations, then run
+# make_submission.py, which also checks that the flat submission folder compiles on its own. The PDF and the
+# submission zip are kept as an artifact of the run. On changes to paper/, or by hand.
+name: paper
+
+on:
+  push:
+    paths: ["paper/**", ".github/workflows/paper.yml"]
+  pull_request:
+    paths: ["paper/**", ".github/workflows/paper.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: TeX Live with the elsarticle class
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends texlive-latex-base texlive-latex-recommended \
+            texlive-latex-extra texlive-publishers texlive-fonts-recommended texlive-science lmodern
+      - name: pdflatex, bibtex, pdflatex, pdflatex
+        working-directory: paper/ras
+        run: |
+          pdflatex -interaction=nonstopmode -halt-on-error main
+          bibtex main
+          pdflatex -interaction=nonstopmode -halt-on-error main
+          pdflatex -interaction=nonstopmode -halt-on-error main
+      - name: No undefined references or citations
+        working-directory: paper/ras
+        run: |
+          if grep -E "(Reference|Citation) .* undefined|There were undefined" main.log; then exit 1; fi
+      - name: Submission folder
+        working-directory: paper/ras
+        run: python3 make_submission.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: paper
+          path: |
+            paper/ras/main.pdf
+            paper/ras/submission.zip
