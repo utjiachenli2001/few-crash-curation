@@ -844,6 +844,45 @@ else:
         if not ok:
             BAD.append("sec:robust " + where)
 
+print("== Count, checkpoint and rating (Section sec:scores), results/drone/ksens_prop50j8_*, ckpt_*, mis_*")
+mean = lambda v: float(np.mean(v))
+f1 = lambda x: f"{x:.1f}"
+KS_ = {}
+for f in sorted(glob.glob(os.path.join(RES, "drone", "ksens_prop50j8_s[0-9].json"))):
+    for r in json.load(open(f))["rows"]:
+        KS_.setdefault(r["k"], []).append(r)
+CK = [json.load(open(f))["results"] for b in ("prop50j8", "gain40j8")
+      for f in sorted(glob.glob(os.path.join(RES, "drone", f"ckpt_{b}_s[0-9].json")))]
+W2 = {b: drone_stat(drone_rows("mis", b)["ours (worst 2 s, sign-rule count) from 1 dives"]) for b in ("prop50j8", "gain40j8")}
+m = [re.search(txt(r"on the propeller fault the top (\d+) leave (\d+) bad flights and crash in (\d+)\\% of dives, while \$k=(\d+)\$ to "
+                   r"(\d+) gives ([\d.]+)--([\d.]+)\\% \((\d) seeds\)"), TEX),
+     re.search(txt(r"Scoring at earlier checkpoints, or summing over all four as standard TracIn does, puts (\d+)--(\d+) bad flights in the "
+                   r"top 40 on the propeller and gain faults"), TEX),
+     re.search(txt(r"\(Table~\\ref\{tab:major\}: ([\d.]+)\\% against ([\d.]+)\\% on the propeller fault, ([\d.]+)\\% against ([\d.]+)\\% on "
+                   r"the gain fault, with the sign rule's count\)"), TEX)]
+if None in m or not KS_ or not CK:
+    print("  DIFF the count, checkpoint and rating paragraph of Section sec:scores or its result files were not found")
+    BAD.append("sec:scores count/checkpoint text")
+else:
+    small, k_lo, k_hi = int(m[0].group(1)), int(m[0].group(4)), int(m[0].group(5))
+    big = [mean([crash_of(r) for r in KS_[k]]) for k in sorted(KS_) if k_lo <= k <= k_hi]
+    cells = [("top-k too small: bad flights left", m[0].group(2), rng_([32 - r["bad_removed"] for r in KS_.get(small, [])] or [-1])),
+             ("top-k too small: crash %", m[0].group(3), f"{mean([crash_of(r) for r in KS_.get(small, [])] or [-1]):.0f}"),
+             ("larger k: crash %", f"{m[0].group(6)}--{m[0].group(7)}", rng_(big, 1)),
+             ("larger k: k values flown", f"{k_lo}--{k_hi}", f"{min(k for k in KS_ if k > small)}--{max(KS_)}"),
+             ("seeds", m[0].group(8), str(min(len(v) for v in KS_.values()))),
+             ("earlier checkpoints and all four summed: bad flights in the top 40", f"{m[1].group(1)}--{m[1].group(2)}",
+              rng_([c[k]["bad_top40"] for c in CK for k in ("epoch 3", "epoch 6", "epoch 9", "multi-checkpoint")])),
+             ("worst 2 s with the sign rule's count, propeller %", m[2].group(1), f1(W2["prop50j8"]["crash"])),
+             ("mean rating, propeller %", m[2].group(2), f1(D["prop50j8"]["sign1"]["crash"])),
+             ("worst 2 s with the sign rule's count, gain %", m[2].group(3), f1(W2["gain40j8"]["crash"])),
+             ("mean rating, gain %", m[2].group(4), f1(D["gain40j8"]["sign1"]["crash"]))]
+    for where, p, data in cells:
+        ok = p == data
+        print(("  ok   " if ok else "  DIFF ") + f"sec:scores {where}: paper {p} data {data}")
+        if not ok:
+            BAD.append("sec:scores " + where)
+
 print("== Imperfect failure records (text of Section sec:robust), results/drone/pool_robust.json")
 m = [re.search(txt(r"State noise and earlier or slower takeovers leave ([\d.]+)--([\d.]+)\\% crashes"), TEX),
      re.search(txt(r"finds (\d+)--(\d+) bad flights and leaves (\d+)\\% crashes on average \((\d+)\\% with the milder fault\)"), TEX)]
@@ -892,7 +931,6 @@ if None in m or any(SW[k]["oracle"] is None for k in SWEEP):
     print("  DIFF the sentences of Section sec:robust (sweep) or the sweep references were not found")
     BAD.append("sec:robust sweep text")
 else:
-    mean = lambda v: float(np.mean(v))
     # "within 3.3 points" holds for the crash rates as Table tab:sweep prints them (+80%: 4.2 against 0.9)
     gap = max(round(mean(v["fact"]), 1) - round(mean(v["oracle"]), 1) for v in SW.values())
     n11 = SW["n11"]
@@ -979,7 +1017,6 @@ else:
 
 print("== Introduction, and the numbers Section sec:assumptions repeats (the safe-completion paragraph and the practice item are checked above)")
 PP = D["prop50j8"]
-f1 = lambda x: f"{x:.1f}"
 m = [re.search(txt(r"the planner crashes in ([\d.]+)\\% of dives. One crash dive, used by \\method\{\}, brings this to ([\d.]+)\\%, "
                    r"close to the ([\d.]+)\\% of a model trained without the faulty logs, while adding the same dive to training "
                    r"leaves ([\d.]+)\\%"), TEX),
