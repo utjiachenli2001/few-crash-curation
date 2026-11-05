@@ -1,6 +1,10 @@
-"""Pool the robustness sweep (sweep_*.json) into table cells; prints a dict of LaTeX cells per config."""
-import glob, json, sys
+"""Pool the robustness sweep (sweep_*.json) into table cells; prints a dict of LaTeX cells per config.
+Reads sweep_*.json and stressref_*.json next to this script (work/), whatever the working directory.
+
+usage (from code/drone/): python work/pool_sweep.py   (fill_sweep.py runs it)"""
+import glob, json, os, sys
 import numpy as np
+HERE = os.path.dirname(os.path.abspath(__file__))
 T = ['test dives', 'steep dives', 'shallow dives']
 CFG = {'SWEEPBASE': 'sev50_n8_l0', 'SEV20': 'sev20_n8_l0', 'SEV35': 'sev35_n8_l0', 'SEV80': 'sev80_n8_l0',
        'N3': 'sev50_n3_l0', 'N5': 'sev50_n5_l0', 'N11': 'sev50_n11_l0', 'L2': 'sev50_n8_l2', 'L4': 'sev50_n8_l4',
@@ -14,7 +18,7 @@ def rng(v):
 
 out = {}
 for key, tag in CFG.items():
-    ds = [json.load(open(f)) for f in sorted(glob.glob(f'sweep_{tag}_s*.json'))]
+    ds = [json.load(open(f)) for f in sorted(glob.glob(os.path.join(HERE, f'sweep_{tag}_s*.json')))]
     ds = [d for d in ds if d.get('sign_rule_flown')]
     if not ds:
         continue
@@ -24,7 +28,8 @@ for key, tag in CFG.items():
     se = cr.std(ddof=1) / np.sqrt(len(cr)) if len(cr) > 1 else 0
     rem = f"{rng([x['sign_removed'] for x in det])} ({rng([x['sign_bad'] for x in det])} / {rng([x['sign_lookalike'] for x in det])})"
     seeds = [d['args']['seed'] for d in ds]
-    refs = [json.load(open(f'stressref_{tag}_s{s}.json')) for s in seeds if glob.glob(f'stressref_{tag}_s{s}.json')]
+    refs = [os.path.join(HERE, f'stressref_{tag}_s{s}.json') for s in seeds]
+    refs = [json.load(open(f)) for f in refs if os.path.exists(f)]
     refs = [r for r in refs if 'oracle' in r]
     ref = lambda k: f"{np.mean([100 * np.mean([r[k][t] for t in T]) for r in refs]):.1f}" if len(refs) == len(ds) else '--'
     cells = rem, ref('unfixed'), f'{cr.mean():.1f}$\\pm${se:.1f}', ref('oracle')
