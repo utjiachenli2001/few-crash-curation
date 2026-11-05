@@ -762,5 +762,41 @@ else:
     # "the share that meets the condition tracks AUROC (Spearman 0.81)" is not checked: which AUROC it uses is not
     # recorded beside the margin runs (with the sign rule's AUROC from mis_*.json and sweep_*.json it comes out 0.79)
 
+print("== The car in detail (text of Section sec:car), results/mujoco/signana_V2.5_dry300_m100_s*.json")
+SA = [json.load(open(f)) for f in sorted(glob.glob(os.path.join(RES, "mujoco", "signana_V2.5_dry300_m100_s[0-9].json")))]
+EXPLORE = ("explore, touches ice", "explore, off ice")
+fast = [100 * d["dry-day (bad)"]["fast_ice_samples"] / sum(v["fast_ice_samples"] for v in d.values() if isinstance(v, dict))
+        for d in SA]
+kept_err = [100 * d["crash_err_clean"] / d["crash_err_faulty"] for d in SA]
+route = [sum(d[g]["row_removed"] for g in ("dry-day (bad)", "look-alike", "slow route")) for d in SA]
+look = [d["look-alike"]["row_removed"] for d in SA]
+expl = [sum(d[g]["row_removed"] for g in EXPLORE) for d in SA]
+kept_fast = [sum(d[g]["row_fast_ice_kept"] for g in EXPLORE) for d in SA]
+m = [re.search(txt(r"make up (\d+)\\% of the fast data over the ice"), TEX),
+     re.search(txt(r"still keeps (\d+)--(\d+)\\% of the error on the crash runs"), TEX),
+     re.search(txt(r"all (\d+) route runs, so all (\d+) look-alikes, and ([\d,]+)--([\d,]+) exploration logs"), TEX),
+     re.search(txt(r"The ([\d,]+)--([\d,]+) samples of fast driving on the ice left in the kept exploration logs"), TEX)]
+if None in m or not SA:
+    print("  DIFF the sentences of Section sec:car or the signana files were not found")
+    BAD.append("sec:car text")
+else:
+    hundreds = lambda v: f"{int(np.floor(min(v) / 100) * 100)}--{int(np.ceil(max(v) / 100) * 100)}"  # "1,000--1,200"
+    cells = [("bad logs' share of the fast data on the ice %", m[0].group(1), f"{min(fast):.0f}", f"{max(fast):.0f}"),
+             ("error kept on the crash runs without the bad logs %", f"{m[1].group(1)}--{m[1].group(2)}",
+              f"{min(kept_err):.0f}--{max(kept_err):.0f}", None),
+             ("route runs removed", m[2].group(1), str(min(route)), str(max(route))),
+             ("look-alikes removed", m[2].group(2), str(min(look)), str(max(look))),
+             ("exploration logs removed", f"{m[2].group(3)}--{m[2].group(4)}".replace(",", ""), hundreds(expl), None),
+             ("fast-ice samples left in the kept exploration logs", f"{m[3].group(1)}--{m[3].group(2)}".replace(",", ""),
+              hundreds(kept_fast), None)]
+    for where, p, lo, hi in cells:
+        data = lo if hi is None or lo == hi else f"{lo}--{hi}"
+        ok = p == data
+        print(("  ok   " if ok else "  DIFF ") + f"sec:car {where}: paper {p} data {data} ({len(SA)} seeds)")
+        if not ok:
+            BAD.append("sec:car " + where)
+    # "the mean puts only 0--32 of the 300 bad logs in the top 360" is not checked: the mean roll-up's ranking is not
+    # stored in results/mujoco
+
 print("\n" +(f"{len(BAD)} MISMATCHES: " + ", ".join(BAD) if BAD else "all checked numbers match the result files"))
 sys.exit(1 if BAD else 0)  # non-zero on any mismatch, so CI fails
