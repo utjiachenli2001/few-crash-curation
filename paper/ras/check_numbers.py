@@ -1127,5 +1127,38 @@ else:
         if not ok:
             BAD.append(where)
 
-print("\n" +(f"{len(BAD)} MISMATCHES: " + ", ".join(BAD) if BAD else "all checked numbers match the result files"))
+print("== Notes: numbers the text gives differently from the data; printed for the authors, not counted as mismatches")
+from scipy.stats import spearmanr  # noqa: E402
+NOTES = []
+m = re.search(txt(r"each with the crash dive's number of transitions \((\d+)--(\d+)\)"), TEX)
+tr = [json.load(open(f))["info"]["reference"]["transitions"] for b, _ in BENCH
+      for f in sorted(glob.glob(os.path.join(RES, "drone", f"reach_fact-hover_{b}_s[0-9].json")))]
+if m and tr:  # the references are cut to the crash dive's length, so every reference row has these counts
+    NOTES.append(("Table tab:ref caption: crash dive's transitions over the three benchmarks", f"{m.group(1)}--{m.group(2)}",
+                  rng_(tr) + " (propeller " + rng_([json.load(open(f))["info"]["reference"]["transitions"] for f in sorted(
+                      glob.glob(os.path.join(RES, "drone", "reach_fact-hover_prop50j8_s[0-9].json")))]) + ", thrust gain "
+                  + rng_([json.load(open(f))["info"]["reference"]["transitions"] for f in sorted(
+                      glob.glob(os.path.join(RES, "drone", "reach_fact-hover_gain40j8_s[0-9].json")))]) + ")"))
+m = re.search(txt(r"the share that meets the condition tracks AUROC \(Spearman ([\d.]+)\)"), TEX)
+share, auc = [], []
+for f in sorted(glob.glob(os.path.join(RES, "drone", "margin_*.json"))):
+    d = json.load(open(f))
+    if "flights_psd" not in d:
+        continue
+    lg = [x for x in d["logs"] if x["group"] == "faulty"]
+    phi, psd = np.array([x["phi"] for x in lg]), np.array([x["psd"] for x in lg])
+    share.append(float(((np.sign(psd) == 1) & (np.abs(phi - psd) < np.abs(psd))).mean()))
+    tag = d["tag"]
+    auc.append(json.load(open(os.path.join(RES, "drone", tag + ".json")))["detection"]["auroc"] if tag.startswith("sweep_") else
+               {r["model"]: r for r in json.load(open(os.path.join(RES, "drone", f"mis_{tag}.json")))["rows"]}
+               ["ours (sign rule) from 1 dives"]["auroc"])
+if m and share:
+    NOTES.append(("Section sec:margin: Spearman of the bad flights' certified share with the sign rule's AUROC", m.group(1),
+                  f"{spearmanr(share, auc)[0]:.2f}"))
+for where, p, data in NOTES:
+    print(("  ok   " if data.split(" ")[0] == p else "  NOTE ") + f"{where}: paper {p} data {data}")
+n_notes = sum(data.split(" ")[0] != p for _, p, data in NOTES)
+
+print("\n" +(f"{len(BAD)} MISMATCHES: " + ", ".join(BAD) if BAD else "all checked numbers match the result files")
+      + (f" ({n_notes} note{'s' if n_notes != 1 else ''} above)" if n_notes else ""))
 sys.exit(1 if BAD else 0)  # non-zero on any mismatch, so CI fails
