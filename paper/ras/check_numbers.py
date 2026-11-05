@@ -844,6 +844,90 @@ else:
         if not ok:
             BAD.append("sec:robust " + where)
 
+print("== Imperfect failure records (text of Section sec:robust), results/drone/pool_robust.json")
+m = [re.search(txt(r"State noise and earlier or slower takeovers leave ([\d.]+)--([\d.]+)\\% crashes"), TEX),
+     re.search(txt(r"finds (\d+)--(\d+) bad flights and leaves (\d+)\\% crashes on average \((\d+)\\% with the milder fault\)"), TEX)]
+if None in m:
+    print("  DIFF the sentences of Section sec:robust (failure records) were not found in main.tex")
+    BAD.append("sec:robust records text")
+else:
+    REC = ("prop50j8", "sweep_sev35_n8_l4")  # the benchmark and the milder fault with look-alikes (Table tab:plants)
+    vc = lambda s, v: 100 * np.mean([r["crash"] for r in PR[s][v]])
+    noisy = [vc(s, v) for s in REC for v in ("noise1", "noise3", "sup_m0.5", "sup_m1.0", "sup_late", "combined")]
+    cells = [("state noise, earlier or slower takeover: crash %", f"{m[0].group(1)}--{m[0].group(2)}", rng_(noisy, 1)),
+             ("first half of the record: bad flights found", f"{m[1].group(1)}--{m[1].group(2)}",
+              rng_([r["bad_removed"] for s in REC for r in PR[s]["first50"]])),
+             ("first half of the record: crash %", m[1].group(3), f"{vc(REC[0], 'first50'):.0f}"),
+             ("first half of the record, milder fault: crash %", m[1].group(4), f"{vc(REC[1], 'first50'):.0f}")]
+    for where, p, data in cells:
+        ok = p == data
+        print(("  ok   " if ok else "  DIFF ") + f"sec:robust {where}: paper {p} data {data}")
+        if not ok:
+            BAD.append("sec:robust " + where)
+
+print("== Severity, faulty share and look-alikes (text of Section sec:robust), results/drone/sweep_*, stressref_*, pool_stress.json")
+SWEEP = {"base": "sev50_n8_l0", "sev20": "sev20_n8_l0", "sev35": "sev35_n8_l0", "sev80": "sev80_n8_l0", "n3": "sev50_n3_l0",
+         "n5": "sev50_n5_l0", "n11": "sev50_n11_l0", "l2": "sev50_n8_l2", "l4": "sev50_n8_l4", "l8": "sev50_n8_l8"}
+SW = {}
+for k, tag in SWEEP.items():  # as pool_sweep.py: seeds with a flown sign rule, references only if every seed has one
+    ds = [d for d in (json.load(open(f)) for f in sorted(glob.glob(os.path.join(RES, "drone", f"sweep_{tag}_s[0-9].json"))))
+          if d.get("sign_rule_flown")]
+    refs = [os.path.join(RES, "drone", f"stressref_{tag}_s{d['args']['seed']}.json") for d in ds]
+    refs = [json.load(open(f)) for f in refs if os.path.exists(f)]
+    refs = refs if len(refs) == len(ds) and all("oracle" in r for r in refs) else None
+    SW[k] = dict(fact=[crash_of(d["sign_rule_flown"]) for d in ds], det=[d["detection"] for d in ds],
+                 oracle=[crash_of(r["oracle"]) for r in refs] if refs else None,
+                 unfixed=[crash_of(r["unfixed"]) for r in refs] if refs else None)
+WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6}
+m = [re.search(txt(r"its first three seeds, hence ([\d.]+) rather than ([\d.]+) for the benchmark row"), TEX),
+     re.search(txt(r"\\method\{\} stays within ([\d.]+) points of the oracle \(mean crash rates ([\d.]+)--([\d.]+)\\%, worst seed "
+                   r"(\d+)\\%\), against (\d+)--(\d+)\\% unfixed except under the mildest fault"), TEX),
+     re.search(txt(r"the sign rule still finds (\d+)--(\d+) of the 32 bad flights"), TEX),
+     re.search(txt(r"one seed of five misses (\w+) and crashes in (\d+)\\%, the worst single seed of the study; the others crash "
+                   r"in (\d+)--(\d+)\\%"), TEX),
+     re.search(txt(r"\(AUROC ([\d.]+)--([\d.]+)\): the sign rule misses up to (\w+) bad flights and removes up to (\d+) "
+                   r"look-alikes, yet no seed crashes in more than ([\d.]+)\\% of dives"), TEX),
+     re.search(txt(r"\((\d+)--(\d+)\\% against (\d+)--(\d+)\\% of dives in these three settings\)"), TEX)]
+if None in m or any(SW[k]["oracle"] is None for k in SWEEP):
+    print("  DIFF the sentences of Section sec:robust (sweep) or the sweep references were not found")
+    BAD.append("sec:robust sweep text")
+else:
+    mean = lambda v: float(np.mean(v))
+    # "within 3.3 points" holds for the crash rates as Table tab:sweep prints them (+80%: 4.2 against 0.9)
+    gap = max(round(mean(v["fact"]), 1) - round(mean(v["oracle"]), 1) for v in SW.values())
+    n11 = SW["n11"]
+    miss = [44 - d["sign_bad"] for d in n11["det"]]
+    worst = int(np.argmax(n11["fact"]))
+    others = [x for i, x in enumerate(n11["fact"]) if i != worst]
+    l8 = SW["l8"]
+    PS = json.load(open(os.path.join(RES, "drone", "pool_stress.json")))
+    cells = [("benchmark row, first three seeds", m[0].group(1), f"{mean(SW['base']['fact']):.1f}"),
+             ("benchmark row in Table tab:major", m[0].group(2), f"{D['prop50j8']['sign1']['crash']:.1f}"),
+             ("largest gap to the oracle, points", m[1].group(1), f"{gap:.1f}"),
+             ("mean crash rates %", f"{m[1].group(2)}--{m[1].group(3)}", rng_([mean(v["fact"]) for v in SW.values()], 1)),
+             ("worst seed %", m[1].group(4), f"{max(x for v in SW.values() for x in v['fact']):.0f}"),
+             ("unfixed except +20% %", f"{m[1].group(5)}--{m[1].group(6)}",
+              rng_([mean(v["unfixed"]) for k, v in SW.items() if k != "sev20"])),
+             ("+20%: bad flights found", f"{m[2].group(1)}--{m[2].group(2)}", rng_([d["sign_bad"] for d in SW["sev20"]["det"]])),
+             ("44 bad: one seed misses", f"{WORDS.get(m[3].group(1), m[3].group(1))} in {len(n11['fact'])}",
+              f"{miss[worst]} in {len(n11['fact'])}" if sum(x > 0 for x in miss) == 1 else f"{sum(x > 0 for x in miss)} seeds miss"),
+             ("44 bad: that seed's crash %", m[3].group(2), f"{n11['fact'][worst]:.0f}"),
+             ("44 bad: the others' crash %", f"{m[3].group(3)}--{m[3].group(4)}", rng_(others)),
+             ("32 look-alikes: AUROC", f"{m[4].group(1)}--{m[4].group(2)}", rng_([d["auroc"] for d in l8["det"]], 2)),
+             ("32 look-alikes: most bad flights missed", str(WORDS.get(m[4].group(3), m[4].group(3))),
+              str(max(32 - d["sign_bad"] for d in l8["det"]))),
+             ("32 look-alikes: most look-alikes removed", m[4].group(4), str(max(d["sign_lookalike"] for d in l8["det"]))),
+             ("32 look-alikes: worst seed %", m[4].group(5), f"{max(l8['fact']):.1f}"),
+             ("three stress settings: FACT reach %", f"{m[5].group(1)}--{m[5].group(2)}",
+              rng_([r["fact_reach"] for k in PS for r in PS[k]])),
+             ("three stress settings: oracle reach %", f"{m[5].group(3)}--{m[5].group(4)}",
+              rng_([r["oracle_reach"] for k in PS for r in PS[k] if r["oracle_reach"] is not None]))]
+    for where, p, data in cells:
+        ok = p == data
+        print(("  ok   " if ok else "  DIFF ") + f"sec:robust sweep {where}: paper {p} data {data}")
+        if not ok:
+            BAD.append("sec:robust sweep " + where)
+
 print("== A fault that starts mid-flight (text of Section sec:local), results/drone/local*_sev50_n11_on25-50_s*.json")
 LT = "sev50_n11_on25-50"
 ld = lambda pat: [json.load(open(f)) for f in sorted(glob.glob(os.path.join(RES, "drone", f"{pat}_{LT}_s[0-9].json")))]
