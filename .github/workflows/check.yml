@@ -17,11 +17,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install NumPy and SciPy at the versions in requirements.txt
-        run: pip install $(grep -E '^(numpy|scipy)==' requirements.txt)
+      - name: Install NumPy, SciPy and Matplotlib at the versions in requirements.txt
+        run: pip install $(grep -E '^(numpy|scipy|matplotlib)==' requirements.txt)
       - name: Compile every script
         run: python -m compileall -q code paper
       - name: Paper numbers (Tables 1-4, 8, 9, Fig. 2 and the text)
         run: python paper/ras/check_numbers.py
       - name: Tables 5-7 and the pooled files
         run: python paper/ras/check_tables.py
+      - name: Figures 2 and 3, byte for byte
+        run: python paper/check_figs.py

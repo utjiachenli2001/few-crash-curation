@@ -142,8 +142,10 @@ first needs its faulty and oracle models: `python work/nat_probe.py <fault> <see
 - The `fill_*` scripts above rewrite Tables 5–7 from `results/drone/`; run on the current results they leave the paper
   unchanged. `python paper/ras/check_tables.py` checks that, and that the `pool_*` scripts reproduce the pooled files in
   `results/drone/`, by running them in a temporary copy (NumPy only; the repository is not touched).
-- Both checks run on every push and pull request (`.github/workflows/check.yml`).
 - `python paper/make_figs.py` redraws Figs. 2 and 3 from `results/`; Fig. 1 is drawn in the paper with TikZ.
+  `python paper/check_figs.py` redraws them in a temporary copy and checks they match `paper/figs/` byte for byte
+  (with the pinned Matplotlib).
+- These three checks run on every push and pull request (`.github/workflows/check.yml`).
 - Build with `pdflatex main && bibtex main && pdflatex main && pdflatex main` in `paper/ras/` (TeX Live with the
   `elsarticle` class). Then `python3 make_submission.py` writes `paper/ras/submission/` (and `submission.zip`): the
   source with flat figure paths, `refs.bib` and `main.bbl`, each figure as its own file (`Figure_1.pdf` is the TikZ
