@@ -19,6 +19,9 @@ paper/main.pdf
 paper/ras/main.pdf
 *.spl
 paper/ras/submission/
+paper/ras/_submission_check/
+# third-party data and models, downloaded or copied in as the README says (not redistributed here)
+code/mujoco/mushr/
 code/drone/processed_data/
 code/drone/Flights.txt
 code/drone/testset.txt
