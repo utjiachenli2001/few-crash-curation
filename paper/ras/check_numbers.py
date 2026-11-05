@@ -107,7 +107,8 @@ def crazyflie(seeds=(1, 2, 3, 4, 5), split=False):
     per = {}
     for s in seeds:
         # the held-out-plant runs reuse the row names but are a different experiment, stored as cfsplit_*.json
-        pat = f"cfsplit_3.1_eq_s{s}*.json" if split else f"cf_3.1_eq_s{s}_*.json"
+        # cf_table.py names its output cf_3.1_eq_s<S>.json, or cf_3.1_eq_s<S>_<CF_TAG>.json when CF_TAG is set
+        pat = f"cfsplit_3.1_eq_s{s}*.json" if split else f"cf_3.1_eq_s{s}[_.]*json"
         for f in sorted(glob.glob(os.path.join(RES, "crazyflie", pat))):
             d = json.load(open(f))
             assert d.get("split", False) == split, f"{f}: wrong experiment"
@@ -293,7 +294,7 @@ ff = [F[k]["crash"] for k in ("huber loss", "l1 loss", "remove 76 worst-fit flig
                                "remove 76 most crash-like flights (most descent)")]
 cur = [F[k]["crash"] for k in ("ours from 1 dives, sign rule", "ours from 3 dives, sign rule")]
 def worst(k):
-    return max(np.mean([100 * np.mean([r[t] for t in DT])]) for f in glob.glob(os.path.join(RES, "crazyflie", "cf_3.1_eq_s[0-9]_*.json"))
+    return max(np.mean([100 * np.mean([r[t] for t in DT])]) for f in glob.glob(os.path.join(RES, "crazyflie", "cf_3.1_eq_s[0-9][_.]*json"))
                for r in json.load(open(f))["rows"] if r["model"] == k)
 pairs = [("failure-free low", g[0], round(min(ff))), ("failure-free high", g[1], round(max(ff))),
          ("oracle", g[2], round(F["oracle (flights below 3.35 V)"]["crash"], 1)),
@@ -314,8 +315,8 @@ for where, p, d in pairs:
 
 def per_seed(k):
     d = {}
-    for f in glob.glob(os.path.join(RES, "crazyflie", "cf_3.1_eq_s[0-9]_*.json")):
-        s = int(re.search(r"_s(\d)_", f).group(1))
+    for f in glob.glob(os.path.join(RES, "crazyflie", "cf_3.1_eq_s[0-9][_.]*json")):
+        s = int(re.search(r"_s(\d)[_.]", f).group(1))
         for r in json.load(open(f))["rows"]:
             if re.sub(r" \(draw \d\)", "", r["model"]) == k:
                 d.setdefault(s, []).append(100 * np.mean([r[t] for t in DT]))
