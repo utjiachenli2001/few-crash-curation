@@ -1,8 +1,12 @@
-"""Few-failure test on a drone the learned model cannot fit exactly (plant with gusts or motor lag, see
-attr_data.HiddenPlant): curation from n crash dives vs adding those n dives to the training data, and both.
+"""FACT from n crash dives against adding those n dives to the training data, and both, on a quadrotor benchmark
+(Table 1 and Fig. 2 (a-c); Sec. 7.10 for prop50mv and lag100j8): removal of the top k flights or by the sign rule,
+with flights rated by the mean or the worst 2 s of their samples' TracIn-cos scores.
 
 Labels on the crash dives are the residuals the plant actually produced (attr_data.realized_residual), for our
 score and for the add-data rows alike. Models are flown on test, steep and shallow dives.
+
+The defaults (--fault prop50mv-gust20 --k 20) are from an earlier version that flew a plant the learned model cannot
+fit exactly (attr_data.HiddenPlant); the paper's runs pass --fault and --k as the README gives them.
 
 usage: python work/mis_drone.py --fault prop50j8 --seed 1 --k 40
 """

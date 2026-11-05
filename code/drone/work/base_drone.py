@@ -3,9 +3,11 @@
   - ensemble MPPI: 5 models trained on the faulty logs (different seeds); the planner uses their mean, and
     optionally adds beta * (members' disagreement) to the cost of every predicted step (uncertainty-aware MPPI)
   - robust regression: one model trained with a Huber or an L1 loss instead of squared error
-  - training-loss filtering: remove the 20 flights the faulty model fits worst, retrain
+  - training-loss filtering: remove the --k flights the faulty model fits worst, retrain (k = 40 in Table 1)
+  - crude rules: remove the k flights with the most axial descent, or every axial-descent sample
 
-Models depend only on the base scenario (prop50mv), so they are trained once and shared across gust levels.
+Models depend only on the base scenario (the fault name before any "-" suffix), so they are trained once and
+shared across plant variants. The defaults (--fault prop50mv --k 20) are those of Sec. 7.10's minority fault.
 Also logs the ensemble disagreement on the faulty model's crash dives against its spread on the training logs,
 to show whether the failure region looks uncertain to the ensemble.
 
