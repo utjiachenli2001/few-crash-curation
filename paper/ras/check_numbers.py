@@ -798,5 +798,51 @@ else:
     # "the mean puts only 0--32 of the 300 bad logs in the top 360" is not checked: the mean roll-up's ranking is not
     # stored in results/mujoco
 
+print("== Other plants (text of Section sec:robust), results/drone/pool_robust.json (check_tables.py rebuilds it)")
+PR = json.load(open(os.path.join(RES, "drone", "pool_robust.json")))
+crash = lambda p, row: 100 * np.mean(PR[p]["rows"][row])
+rng_ = lambda v, d=0: f"{min(v):.{d}f}--{max(v):.{d}f}" if f"{min(v):.{d}f}" != f"{max(v):.{d}f}" else f"{min(v):.{d}f}"
+LEARNED, ALLP = ("wide", "subset", "gbt"), ("wide", "subset", "gbt", "mismatch")
+m = [re.search(txt(r"\\method\{\} removes (\d+)--(\d+) of the 32 bad flights and stays within ([\d.]+) points of the oracle, "
+                   r"while adding the crash leaves (\d+)--(\d+)\\%"), TEX),
+     re.search(txt(r"\(\$R\^2\$ ([\d.]+)--([\d.]+) per axis\) but differ from it by ([\d.]+)--([\d.]+)~m/s\$\^2\$"), TEX),
+     re.search(txt(r"On every one of these plants \\method\{\} removes (\d+)--(\d+) of the 32 bad flights \((\d+)--(\d+) in all\)"), TEX),
+     re.search(txt(r"The plant predicts the unseen flights with \$R\^2\$ ([\d.]+)--([\d.]+) per axis; \\method\{\} removes all "
+                   r"(\d+) bad flights \((\d+)--(\d+) in all\) and matches the oracle on every seed \(([\d.]+)\\%\), while adding "
+                   r"the crash leaves (\d+)\\%"), TEX),
+     re.search(txt(r"Under the mismatch, the oracle and \\method\{\} both crash in (\d+)\\%"), TEX)]
+if None in m:
+    print("  DIFF the sentences of Section sec:robust (other plants) were not found in main.tex")
+    BAD.append("sec:robust plants text")
+else:
+    H = PR["heldout"]
+    # "within 0.5 points" holds for the crash rates as Table tab:plants prints them (subset: 2.2 against 1.7;
+    # unrounded 2.22 against 1.67)
+    gap_oracle = max(abs(round(crash(p, "fact"), 1) - round(crash(p, "oracle"), 1)) for p in LEARNED)
+    cells = [("learned plants: bad flights found", f"{m[0].group(1)}--{m[0].group(2)}",
+              rng_([b for p in LEARNED for b in PR[p]["bad"]])),
+             ("learned plants: largest gap to the oracle, points, at most", m[0].group(3),
+              m[0].group(3) if gap_oracle <= float(m[0].group(3)) + 1e-9 else f"{gap_oracle:.1f}"),
+             ("learned plants: adding the crash, crash %", f"{m[0].group(4)}--{m[0].group(5)}",
+              rng_([crash(p, "add") for p in LEARNED])),
+             ("learned plants: R^2 per axis", f"{m[1].group(1)}--{m[1].group(2)}", rng_([x for p in LEARNED for x in PR[p]["r2"]], 2)),
+             ("learned plants: mean gap to the default plant", f"{m[1].group(3)}--{m[1].group(4)}",
+              rng_([PR[p]["gap"] for p in LEARNED], 2)),
+             ("every plant: bad flights found", f"{m[2].group(1)}--{m[2].group(2)}", rng_([b for p in ALLP for b in PR[p]["bad"]])),
+             ("every plant: flights removed", f"{m[2].group(3)}--{m[2].group(4)}", rng_([b for p in ALLP for b in PR[p]["removed"]])),
+             ("cross-fitted: R^2 per axis", f"{m[3].group(1)}--{m[3].group(2)}", rng_(H["r2"], 2)),
+             ("cross-fitted: bad flights found (all)", m[3].group(3), rng_(H["bad"])),
+             ("cross-fitted: flights removed", f"{m[3].group(4)}--{m[3].group(5)}", rng_(H["removed"])),
+             ("cross-fitted: FACT crash % (= oracle on every seed)", m[3].group(6),
+              f"{crash('heldout', 'fact'):.1f}" if H["rows"]["fact"] == H["rows"]["oracle"] else "differs from the oracle"),
+             ("cross-fitted: adding the crash, crash %", m[3].group(7), f"{crash('heldout', 'add'):.0f}"),
+             ("mismatch: oracle crash %", m[4].group(1), f"{crash('mismatch', 'oracle'):.0f}"),
+             ("mismatch: FACT crash %", m[4].group(1), f"{crash('mismatch', 'fact'):.0f}")]
+    for where, p, data in cells:
+        ok = p == data
+        print(("  ok   " if ok else "  DIFF ") + f"sec:robust {where}: paper {p} data {data}")
+        if not ok:
+            BAD.append("sec:robust " + where)
+
 print("\n" +(f"{len(BAD)} MISMATCHES: " + ", ".join(BAD) if BAD else "all checked numbers match the result files"))
 sys.exit(1 if BAD else 0)  # non-zero on any mismatch, so CI fails
