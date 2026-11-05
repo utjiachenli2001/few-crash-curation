@@ -672,6 +672,10 @@ def crash_of(r):
     return 100 * np.mean([r[t] for t in DT])
 
 
+# "lo--hi" (or one value) at d decimals, as the paper writes ranges
+rng_ = lambda v, d=0: f"{min(v):.{d}f}--{max(v):.{d}f}" if f"{min(v):.{d}f}" != f"{max(v):.{d}f}" else f"{min(v):.{d}f}"
+
+
 SP = r"\s+"
 m1 = re.search(SP.join(r"an L1 loss crashes in ([\d.]+)\\% of dives and removing the 20 worst-fit flights in ([\d.]+)\\%, "
                        r"against ([\d.]+)\\% for \\method\{\} \((\d+) seeds\)".split(" ")), TEX)
@@ -797,11 +801,25 @@ else:
             BAD.append("sec:car " + where)
     # "the mean puts only 0--32 of the 300 bad logs in the top 360" is not checked: the mean roll-up's ranking is not
     # stored in results/mujoco
+    # the minority car fault: the gradient-free score (out_seeds_*) against TracIn (seeds_*), bad logs in the top 100;
+    # the gradient-free block above compares this sentence with Section sec:scores, here it meets the data
+    mc = re.search(txt(r"the gradient-free score finds (\d+)--(\d+) of the bad logs against (\d+)--(\d+) for TracIn"), TEX)
+    gfree = [v["bad_in_top_k"] for f in sorted(glob.glob(os.path.join(RES, "mujoco", "out_seeds_V2.5_dry100_s[0-9].json")))
+             for v in json.load(open(f))["detection"].values()]
+    tracin = [r["bad_removed"] for f in sorted(glob.glob(os.path.join(RES, "mujoco", "seeds_V2.5_dry100_s[0-9].json")))
+              for r in json.load(open(f))["rows"] if re.match(r"ours from \d+ runs, remove 100 \|", r["model"])]
+    for where, p, data in [("minority fault: bad logs the gradient-free score finds",
+                            f"{mc.group(1)}--{mc.group(2)}" if mc else None, rng_(gfree) if gfree else None),
+                           ("minority fault: bad logs TracIn finds", f"{mc.group(3)}--{mc.group(4)}" if mc else None,
+                            rng_(tracin) if tracin else None)]:
+        ok = p is not None and p == data
+        print(("  ok   " if ok else "  DIFF ") + f"sec:car {where}: paper {p} data {data}")
+        if not ok:
+            BAD.append("sec:car " + where)
 
 print("== Other plants (text of Section sec:robust), results/drone/pool_robust.json (check_tables.py rebuilds it)")
 PR = json.load(open(os.path.join(RES, "drone", "pool_robust.json")))
 crash = lambda p, row: 100 * np.mean(PR[p]["rows"][row])
-rng_ = lambda v, d=0: f"{min(v):.{d}f}--{max(v):.{d}f}" if f"{min(v):.{d}f}" != f"{max(v):.{d}f}" else f"{min(v):.{d}f}"
 LEARNED, ALLP = ("wide", "subset", "gbt"), ("wide", "subset", "gbt", "mismatch")
 m = [re.search(txt(r"\\method\{\} removes (\d+)--(\d+) of the 32 bad flights and stays within ([\d.]+) points of the oracle, "
                    r"while adding the crash leaves (\d+)--(\d+)\\%"), TEX),
