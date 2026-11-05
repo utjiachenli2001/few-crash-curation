@@ -764,7 +764,8 @@ else:
         if not ok:
             BAD.append("sec:margin " + where)
     # "the share that meets the condition tracks AUROC (Spearman 0.81)" is not checked: which AUROC it uses is not
-    # recorded beside the margin runs (with the sign rule's AUROC from mis_*.json and sweep_*.json it comes out 0.79)
+    # recorded beside the margin runs. The bad flights' certified share against the sign rule's AUROC (from mis_*.json
+    # and sweep_*.json, or recomputed from the margin files' own phi over all flights) gives 0.79 over the 35 runs
 
 print("== The car in detail (text of Section sec:car), results/mujoco/signana_V2.5_dry300_m100_s*.json")
 SA = [json.load(open(f)) for f in sorted(glob.glob(os.path.join(RES, "mujoco", "signana_V2.5_dry300_m100_s[0-9].json")))]
