@@ -138,9 +138,10 @@ first needs its faulty and oracle models: `python work/nat_probe.py <fault> <see
 ### Checking the numbers and building the paper
 
 - `python paper/ras/check_numbers.py` recomputes, from `results/`, every number in Tables 1–4, 8 and 9 and Fig. 2 and
-  the numbers quoted in the related work, Sections 4.2, 4.3 and 7.1–7.10 and Appendix B, and lists any that differ from
-  `paper/ras/main.tex` (exit status 1 if any do); it also checks the numbers in the abstract, `highlights.txt`
-  and this README's results. It needs only NumPy and SciPy, not the raw data.
+  the numbers quoted in the abstract, the introduction, the related work, Sections 4.2, 4.3 and 7.1–7.10, the table of
+  Section 8.1 and Appendix B (449 in all), and lists any that differ from `paper/ras/main.tex` (exit status 1 if any
+  do); it also checks the numbers in `highlights.txt` and in this README's results. It needs only NumPy and SciPy,
+  not the raw data. A few sentences it cannot check are marked in the script (the data behind them is not stored).
 - The `fill_*` scripts above rewrite Tables 5–7 from `results/drone/`; run on the current results they leave the paper
   unchanged. `python paper/ras/check_tables.py` checks that, and that the `pool_*` scripts reproduce the pooled files in
   `results/drone/`, by running them in a temporary copy (NumPy only; the repository is not touched).
