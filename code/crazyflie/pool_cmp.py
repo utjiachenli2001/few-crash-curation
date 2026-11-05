@@ -10,8 +10,8 @@ KEY = ["faulty (all flights)", "oracle (flights below 3.35 V)", "add 1 crash div
        "learning to reweight, 1 crash dives as clean set, and add them (W=20)",
        "learning to reweight, 3 crash dives as clean set, and add them (W=20)"]
 per = {}
-for f in [g for g in glob.glob("cf_3.1_eq_s*_*.json") if re.search(r"_s\d+_(base|A|B|C|L)\.json$", g)]:
-    s = int(re.search(r"_s(\d+)_", f).group(1))
+for f in [g for g in glob.glob("cf_3.1_eq_s*.json") if re.search(r"_s\d+(_(base|A|B|C|L))?\.json$", g)]:  # or no tag
+    s = int(re.search(r"_s(\d+)[_.]", f).group(1))
     for r in json.load(open(f))["rows"]:
         per.setdefault(r["model"], {})[s] = (100 * np.mean([r[t] for t in T]), 100 * np.mean([r[t + " reach"] for t in T]))
 for k in KEY:

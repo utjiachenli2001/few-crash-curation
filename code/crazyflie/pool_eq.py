@@ -1,13 +1,19 @@
 """Pool the equal-steps Crazyflie tables over seeds: mean crash % (test/steep/shallow) and reach, +- s.e.
-usage: python pool_eq.py [--split] [--seeds 1,2,3]   (--split: the held-out-plant runs, cfsplit_*.json, instead)"""
+usage: python pool_eq.py [--split] [--seeds 1,2,3]   (--split: the held-out-plant runs, cfsplit_*.json, instead;
+default: every seed with result files here, as in the paper: 1-5, and 1-3 with --split)
+Reads cf_3.1_eq_s<S>.json and cf_3.1_eq_s<S>_<CF_TAG>.json (cfsplit_... with --split)."""
 import glob, json, re, sys
 import numpy as np
 SPLIT = "--split" in sys.argv
-seeds = [int(a) for a in sys.argv[sys.argv.index("--seeds") + 1].split(",")] if "--seeds" in sys.argv else [1, 2, 3]
+# the held-out-plant runs reuse the main table's row names, so the two experiments live under different prefixes
+PAT = "cfsplit_3.1_eq_s{}*.json" if SPLIT else "cf_3.1_eq_s{}[_.]*json"
+if "--seeds" in sys.argv:
+    seeds = [int(a) for a in sys.argv[sys.argv.index("--seeds") + 1].split(",")]
+else:
+    seeds = sorted({int(re.search(r"_s(\d+)[_.]", f).group(1)) for f in glob.glob(PAT.format("*"))})
 tab = {}
 for s in seeds:
-    # the held-out-plant runs reuse the main table's row names, so the two experiments live under different prefixes
-    pat = f"cfsplit_3.1_eq_s{s}*.json" if SPLIT else f"cf_3.1_eq_s{s}_*.json"
+    pat = PAT.format(s)
     for f in sorted(glob.glob(pat)):
         d = json.load(open(f))
         assert d.get("split", False) == SPLIT, f"{f} is from the {'held-out' if d.get('split') else 'main'} experiment"
