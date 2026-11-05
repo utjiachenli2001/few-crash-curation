@@ -701,5 +701,66 @@ else:
         if not ok:
             BAD.append("sec:minority " + where)
 
+print("== How far TracIn is from the theory (Section sec:margin), results/drone/margin_*.json as pool_margin.py pools them")
+WANT = {"faulty": 1.0, "look-alike": -1.0, "other": -1.0}
+tot = {g: dict(n=0, cert=0, ok=0, wrong=0, theory=0, kernel=0) for g in WANT}
+kneg, ratio = [], {}
+for f in sorted(glob.glob(os.path.join(RES, "drone", "margin_*.json"))):
+    d = json.load(open(f))
+    if "flights_psd" not in d:
+        continue
+    for g, w in WANT.items():  # "other": only flights with real descent data are in the fault regime
+        lg = [x for x in d["logs"] if x["group"] == g and (g != "other" or x["descent_share"] > 0.05)]
+        if not lg:
+            continue
+        phi, psd = np.array([x["phi"] for x in lg]), np.array([x["psd"] for x in lg])
+        ok_psi, wrong = np.sign(psd) == w, np.sign(phi) != w
+        t = tot[g]
+        t["n"] += len(lg); t["cert"] += int((ok_psi & (np.abs(phi - psd) < np.abs(psd))).sum())
+        t["ok"] += int((~wrong).sum()); t["wrong"] += int(wrong.sum())
+        t["theory"] += int((wrong & ~ok_psi).sum()); t["kernel"] += int((wrong & ok_psi).sum())
+        if g == "faulty":
+            ratio[d["tag"]] = float(np.median(np.abs(phi - psd) / (np.abs(psd) + 1e-30)))
+    kneg += [d["pairs"][g]["scalar_kernel_negative"] for g in ("faulty", "correct")]
+bench = [v for k, v in ratio.items() if not k.startswith("sweep_")]
+sev20 = [v for k, v in ratio.items() if k.startswith("sweep_sev20_")]
+pct = lambda g, k: 100 * tot[g][k] / tot[g]["n"]
+txt = lambda s: SP.join(s.split(" "))
+m = [re.search(txt(r"Over (\d+) drone runs \(Tables~\\ref\{tab:major\} and~\\ref\{tab:sweep\}\), this condition holds for "
+                   r"(\d+)\\% of the bad flights, (\d+)\\% of the look-alikes and (\d+)\\% of the other correct flights with "
+                   r"descent data, and \$\\phi\$ has the predicted sign for (\d+)\\%, (\d+)\\% and (\d+)\\%"), TEX),
+     re.search(txt(r"the scalar part is negative for (\d+)--(\d+)\\% of pairs"), TEX),
+     re.search(txt(r"over bad flights is ([\d.]+)--([\d.]+) on the benchmarks but ([\d.]+)--([\d.]+) at \+20\\% thrust"), TEX),
+     re.search(txt(r"Of the (\d+) bad flights scored with the wrong sign, (\d+) already have the wrong \$\\psi\$"), TEX),
+     re.search(txt(r"the (\d+) wrong-sign look-alikes are all flipped by \$\\delta\$"), TEX)]
+if None in m:
+    print("  DIFF the sentences of Section sec:margin were not found in main.tex")
+    BAD.append("sec:margin text")
+else:
+    cells = [("runs", m[0].group(1), len(ratio)),
+             ("condition holds, bad flights %", m[0].group(2), pct("faulty", "cert")),
+             ("condition holds, look-alikes %", m[0].group(3), pct("look-alike", "cert")),
+             ("condition holds, other correct %", m[0].group(4), pct("other", "cert")),
+             ("predicted sign, bad flights %", m[0].group(5), pct("faulty", "ok")),
+             ("predicted sign, look-alikes %", m[0].group(6), pct("look-alike", "ok")),
+             ("predicted sign, other correct %", m[0].group(7), pct("other", "ok")),
+             ("pairs with a negative scalar part, lowest %", m[1].group(1), 100 * min(kneg)),
+             ("pairs with a negative scalar part, highest %", m[1].group(2), 100 * max(kneg)),
+             ("median |delta|/|psi|, benchmarks, lowest", m[2].group(1), min(bench)),
+             ("median |delta|/|psi|, benchmarks, highest", m[2].group(2), max(bench)),
+             ("median |delta|/|psi|, +20% thrust, lowest", m[2].group(3), min(sev20)),
+             ("median |delta|/|psi|, +20% thrust, highest", m[2].group(4), max(sev20)),
+             ("bad flights with the wrong sign", m[3].group(1), tot["faulty"]["wrong"]),
+             ("of them with the wrong psi", m[3].group(2), tot["faulty"]["theory"]),
+             ("look-alikes with the wrong sign", m[4].group(1), tot["look-alike"]["wrong"]),
+             ("look-alikes with the wrong sign flipped by delta", m[4].group(1), tot["look-alike"]["kernel"])]
+    for where, p, x in cells:
+        ok = as_printed(p, x)
+        print(("  ok   " if ok else "  DIFF ") + f"sec:margin {where}: paper {p} data {x:.3g}")
+        if not ok:
+            BAD.append("sec:margin " + where)
+    # "the share that meets the condition tracks AUROC (Spearman 0.81)" is not checked: which AUROC it uses is not
+    # recorded beside the margin runs (with the sign rule's AUROC from mis_*.json and sweep_*.json it comes out 0.79)
+
 print("\n" +(f"{len(BAD)} MISMATCHES: " + ", ".join(BAD) if BAD else "all checked numbers match the result files"))
 sys.exit(1 if BAD else 0)  # non-zero on any mismatch, so CI fails
