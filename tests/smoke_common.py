@@ -29,15 +29,25 @@ def run(src, sub, make_data, boot, steps, env_extra=None, doc=""):
     """src: the platform's code folder; sub: the folder the scripts run in, relative to the run folder ("work" for
     the drone, where scripts run from code/drone/, or "." for the Crazyflie); make_data(folder) writes the synthetic
     data into the scripts' folder; steps: (name, [script, args...], check or None, needs) with check(folder) -> note
-    and needs the names of earlier steps it depends on."""
+    and needs the names of earlier steps it depends on. In place of [script, args...] a step can give a function of
+    the scripts' folder, run in this process (to rename a file, say), whose docstring labels it."""
     args = parse_args(doc)
     tmp = args.keep or tempfile.mkdtemp(prefix="smoke_")
-    here = os.path.join(tmp, sub)
-    os.makedirs(here, exist_ok=True)
-    for f in os.listdir(src):
-        if f.endswith(".py"):
-            shutil.copy(os.path.join(src, f), here)
-    make_data(here)
+    try:
+        here = os.path.join(tmp, sub)
+        os.makedirs(here, exist_ok=True)
+        for f in os.listdir(src):
+            if f.endswith(".py"):
+                shutil.copy(os.path.join(src, f), here)
+        make_data(here)
+        failed = run_steps(steps, args, tmp, here, sub, boot, env_extra)
+    finally:
+        if not args.keep:
+            shutil.rmtree(tmp, ignore_errors=True)
+    sys.exit(1 if failed else 0)
+
+
+def run_steps(steps, args, tmp, here, sub, boot, env_extra):
     only = set(filter(None, args.only.split(",")))
     want = set()
     for name, _, _, needs in reversed(steps):  # a step and everything it needs
@@ -46,35 +56,34 @@ def run(src, sub, make_data, boot, steps, env_extra=None, doc=""):
     env = dict(os.environ, PYTHONDONTWRITEBYTECODE="1", NT="1", **(env_extra or {}))
     code = "import os, runpy, sys\nsys.path.insert(0, os.path.abspath(%r))\n" % sub + boot + RUN_SCRIPT
     t0, failed, ok = time.time(), [], set()
-    try:
-        for name, cmd, check, needs in steps:
-            if name not in want:
-                continue
-            label = " ".join(cmd)
-            if not set(needs) <= ok:
-                print(f"  skip {label} (needs {', '.join(sorted(set(needs) - ok))})", flush=True)
-                failed.append(label)
-                continue
-            t1 = time.time()
-            r = subprocess.run([sys.executable, "-c", code, os.path.join(sub, cmd[0])] + cmd[1:], cwd=tmp, env=env,
-                               capture_output=True, text=True)
+    for name, cmd, check, needs in steps:
+        if name not in want:
+            continue
+        label = cmd.__doc__ if callable(cmd) else " ".join(cmd)
+        if not set(needs) <= ok:
+            print(f"  skip {label} (needs {', '.join(sorted(set(needs) - ok))})", flush=True)
+            failed.append(label)
+            continue
+        t1 = time.time()
+        if callable(cmd):
+            cmd(here)
+        else:
+            r = subprocess.run([sys.executable, "-c", code, os.path.join(sub, cmd[0])] + cmd[1:], cwd=tmp,
+                               env=env, capture_output=True, text=True)
             if r.returncode != 0:
                 print(f"  FAIL {label}\n{r.stdout[-2000:]}\n{r.stderr[-4000:]}", flush=True)
                 failed.append(label)
                 continue
-            try:
-                note = check(here) if check else ""
-            except AssertionError as e:
-                print(f"  FAIL {label}: {e}", flush=True)
-                failed.append(label)
-                continue
-            ok.add(name)
-            print(f"  ok   {label} ({time.time() - t1:.0f}s){': ' + note if note else ''}", flush=True)
-    finally:
-        if not args.keep:
-            shutil.rmtree(tmp, ignore_errors=True)
+        try:
+            note = check(here) if check else ""
+        except AssertionError as e:
+            print(f"  FAIL {label}: {e}", flush=True)
+            failed.append(label)
+            continue
+        ok.add(name)
+        print(f"  ok   {label} ({time.time() - t1:.0f}s){': ' + note if note else ''}", flush=True)
     print(f"\n{'FAILED: ' + '; '.join(failed) if failed else 'all smoke steps passed'} ({time.time() - t0:.0f}s)")
-    sys.exit(1 if failed else 0)
+    return failed
 
 
 def expect(cond, msg):

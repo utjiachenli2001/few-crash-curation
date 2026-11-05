@@ -30,7 +30,13 @@ jobs:
         run: python paper/check_figs.py
 
   smoke:
+    # the experiment scripts run end to end, made small (tests/smoke_*.py): quadrotor and Crazyflie on synthetic
+    # data, the MuJoCo car with fewer logs
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [drone, crazyflie, mujoco]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -39,8 +45,12 @@ jobs:
       - name: Install CPU PyTorch and the packages the scripts import, at the versions in requirements.txt
         run: |
           pip install $(grep -E '^torch==' requirements.txt) --index-url https://download.pytorch.org/whl/cpu
-          pip install $(grep -E '^(numpy|scipy|scikit-learn)==' requirements.txt)
-      - name: Quadrotor scripts on synthetic data
-        run: python tests/smoke_drone.py
-      - name: Crazyflie scripts on synthetic data
-        run: python tests/smoke_crazyflie.py
+          pip install $(grep -E '^(numpy|scipy|scikit-learn|mujoco)==' requirements.txt)
+      - name: MuSHR car model (prl-mushr/mushr_mujoco_ros, BSD-3), as the README describes
+        if: matrix.platform == 'mujoco'
+        run: |
+          git clone -q https://github.com/prl-mushr/mushr_mujoco_ros "$RUNNER_TEMP/mushr"
+          git -C "$RUNNER_TEMP/mushr" checkout -q c86eef33dadb0e98fe916a55ac6aa1fc03af027e
+          echo "MUSHR_CARS=$RUNNER_TEMP/mushr/models/cars" >> "$GITHUB_ENV"
+      - name: Run the ${{ matrix.platform }} scripts
+        run: python tests/smoke_${{ matrix.platform }}.py

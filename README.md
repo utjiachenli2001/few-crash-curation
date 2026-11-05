@@ -68,7 +68,7 @@ ordinary training, and 27–31 s with learning to reweight implemented efficient
 | `code/mujoco/` | MuSHR car in MuJoCo with an icy corner: `env.py`, `core.py`, `attrlib.py`, log builders and experiments |
 | `code/crazyflie/` | Battery-sag fault in real NanoBench Crazyflie logs: `build_cf.py`, `cf.py`, `cf_table.py` and controls |
 | `results/` | The result JSON files behind every number in the paper, per platform |
-| `tests/` | Smoke tests that run the quadrotor and Crazyflie scripts on synthetic data |
+| `tests/` | Smoke tests that run the quadrotor and Crazyflie scripts on synthetic data and the car scripts on fewer logs |
 
 ## Setup
 
@@ -149,8 +149,10 @@ first needs its faulty and oracle models: `python work/nat_probe.py <fault> <see
 - `python tests/smoke_drone.py` and `python tests/smoke_crazyflie.py` run the quadrotor scripts (`nat_probe`, `mis`,
   `sign3add`, `base`, `controls` and `reach` for every model) and the Crazyflie scripts (`cf_table`, `cf_extra`,
   `cf_outfly`) end to end on small synthetic stand-ins for NeuroBEM and NanoBench, unchanged, with fewer MPPI rollouts
-  and dives (about 3 and 1.5 minutes on one CPU thread; PyTorch, scikit-learn and SciPy). They check that the code runs
-  with the installed packages and writes results of the right shape, not the results themselves.
+  and dives (about 3 and 1.5 minutes on one CPU thread; PyTorch, scikit-learn and SciPy). With the MuSHR model,
+  `MUSHR_CARS=<mushr_mujoco_ros>/models/cars python tests/smoke_mujoco.py` does the same for the car (Table 8 and
+  Section 7.8, with a few logs of each kind; about 4 minutes; MuJoCo too). They check that the code runs with the
+  installed packages and writes results of the right shape, not the results themselves.
 - These checks run on every push and pull request (`.github/workflows/check.yml`).
 - Build with `pdflatex main && bibtex main && pdflatex main && pdflatex main` in `paper/ras/` (TeX Live with the
   `elsarticle` class). Then `python3 make_submission.py` writes `paper/ras/submission/` (and `submission.zip`): the
