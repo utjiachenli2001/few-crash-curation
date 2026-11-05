@@ -660,5 +660,46 @@ print(("  ok   " if ok else "  DIFF ") + f"tab:assume gradient-free row (iv): pa
 if not ok:
     BAD.append("tab:assume identity kernel")
 
+print("== Minority and inconsistent faults (Section sec:minority), results/drone/{base,mis}_{prop50mv,lag100j8}_s*.json")
+
+
+def as_printed(p, x):
+    """x rounded to as many decimals as the paper prints p with, compared with p."""
+    return round(x, len(p.split(".")[1]) if "." in p else 0) == float(p)
+
+
+def crash_of(r):
+    return 100 * np.mean([r[t] for t in DT])
+
+
+SP = r"\s+"
+m1 = re.search(SP.join(r"an L1 loss crashes in ([\d.]+)\\% of dives and removing the 20 worst-fit flights in ([\d.]+)\\%, "
+                       r"against ([\d.]+)\\% for \\method\{\} \((\d+) seeds\)".split(" ")), TEX)
+m2 = re.search(SP.join(r"worst-fit removal fixes the model \(([\d.]+)\\%, seed 1\); \\method\{\} matches it only when each log "
+                       r"is rated by its top-scoring 2~s of samples \(([\d.]+)\\%, against ([\d.]+)\\% with the mean\)".split(" ")), TEX)
+if m1 is None or m2 is None:
+    print("  DIFF the sentences of Section sec:minority were not found in main.tex")
+    BAD.append("sec:minority text")
+else:
+    base_mv, mis_mv = drone_rows("base", "prop50mv"), drone_rows("mis", "prop50mv")
+    # the paper's FACT number for the minority fault is the top-20 removal (k = 20, as for the worst-fit baseline);
+    # the sign-rule rows exist for seed 1 only
+    fact = [crash_of(r) for r in mis_mv["ours from 1 dives, remove 20"]]
+    lag_base = {r["model"]: r for r in json.load(open(os.path.join(RES, "drone", "base_lag100j8_s1.json")))["rows"]}
+    lag_mis = {r["model"]: r for r in json.load(open(os.path.join(RES, "drone", "mis_lag100j8_s1.json")))["rows"]}
+    cells = [("minority L1 loss", m1.group(1), np.mean([crash_of(r) for r in base_mv["l1 loss"]])),
+             ("minority 20 worst-fit flights removed", m1.group(2),
+              np.mean([crash_of(r) for r in base_mv["remove 20 worst-fit flights"]])),
+             ("minority FACT, top 20", m1.group(3), np.mean(fact)),
+             ("minority FACT, seeds", m1.group(4), len(fact)),
+             ("inconsistent worst-fit, seed 1", m2.group(1), crash_of(lag_base["remove 40 worst-fit flights"])),
+             ("inconsistent FACT worst 2 s, seed 1", m2.group(2), crash_of(lag_mis["ours (worst 2 s) from 1 dives, remove 40"])),
+             ("inconsistent FACT mean, seed 1", m2.group(3), crash_of(lag_mis["ours from 1 dives, remove 40"]))]
+    for where, p, x in cells:
+        ok = as_printed(p, x)
+        print(("  ok   " if ok else "  DIFF ") + f"sec:minority {where}: paper {p} data {x:.2f}")
+        if not ok:
+            BAD.append("sec:minority " + where)
+
 print("\n" +(f"{len(BAD)} MISMATCHES: " + ", ".join(BAD) if BAD else "all checked numbers match the result files"))
 sys.exit(1 if BAD else 0)  # non-zero on any mismatch, so CI fails
