@@ -1,0 +1,27 @@
+# Checks that need no raw data: every script compiles, and the paper's numbers match results/.
+name: check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  numbers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install NumPy and SciPy at the versions in requirements.txt
+        run: pip install $(grep -E '^(numpy|scipy)==' requirements.txt)
+      - name: Compile every script
+        run: python -m compileall -q code paper
+      - name: Paper numbers (Tables 1-4, 8, 9, Fig. 2 and the text)
+        run: python paper/ras/check_numbers.py
+      - name: Tables 5-7 and the pooled files
+        run: python paper/ras/check_tables.py
