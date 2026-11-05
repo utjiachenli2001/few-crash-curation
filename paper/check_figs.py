@@ -17,6 +17,27 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 FIGS = os.path.join(ROOT, "paper", "figs")
 
 
+def explain(a, b):
+    """Why two renderings differ: the font Matplotlib picked, and how many PNG pixels differ."""
+    try:
+        import matplotlib
+        from matplotlib import font_manager
+        import numpy as np
+        from PIL import Image
+    except ImportError:
+        return
+    font = font_manager.findfont(font_manager.FontProperties(family="STIXGeneral"))
+    bundled = os.path.dirname(matplotlib.__file__) in font
+    print(f"      Matplotlib {matplotlib.__version__}; STIXGeneral from {font} ({'bundled' if bundled else 'system font'})")
+    if a.endswith(".png"):
+        x, y = np.asarray(Image.open(a).convert("RGB"), int), np.asarray(Image.open(b).convert("RGB"), int)
+        if x.shape != y.shape:
+            print(f"      size {x.shape[1]}x{x.shape[0]} in the repository, {y.shape[1]}x{y.shape[0]} redrawn")
+        else:
+            d = np.abs(x - y).max(-1)
+            print(f"      {(d > 0).mean():.2%} of pixels differ, by at most {d.max()} of 255")
+
+
 def main():
     bad = []
     with tempfile.TemporaryDirectory() as tmp:
@@ -38,6 +59,7 @@ def main():
             same = open(a, "rb").read() == open(b, "rb").read()
             print(f"  {'ok  ' if same else 'MISMATCH'} paper/figs/{f}")
             if not same:
+                explain(a, b)
                 bad.append(f)
     print()
     if bad:
