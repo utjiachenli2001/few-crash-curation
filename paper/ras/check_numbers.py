@@ -977,5 +977,72 @@ else:
         if not ok:
             BAD.append("sec:local " + where)
 
+print("== Abstract, highlights.txt and the README's results (the numbers most people read)")
+README = open(os.path.join(ROOT, "README.md")).read()
+HL = open(os.path.join(ROOT, "paper", "ras", "highlights.txt")).read()
+PP = D["prop50j8"]
+f1 = lambda x: f"{x:.1f}"
+# one crash dive used as training data on the propeller benchmark: added at W=20, at heavier weights, in balanced
+# batches, or by fine-tuning (Section sec:reweight)
+as_data = [PP["add1"]["crash"]] + [v["crash"] for k, v in PP.items() if k.startswith(("controls add_", "controls ft_"))]
+l2rw_gain = [R[("l2rw", "gain40j8")]["crash"], R[("l2rw_la", "gain40j8")]["crash"], D["gain40j8"]["controls l2rw"]["crash"]]
+inside = lambda v, lo, hi: all(float(lo) <= round(x) <= float(hi) for x in v)  # a prose bracket such as "97--98%"
+m = [re.search(txt(r"lowers the crash rate from (\d+)\\% to ([\d.]+)\\%; robust fitting leaves (\d+)--(\d+)\\%, and adding the "
+                   r"crash (\d+)--(\d+)\\%"), TEX),
+     re.search(txt(r"crashes more on a thrust-gain fault \(([\d.]+)--([\d.]+)\\% against ([\d.]+)\\%\)"), TEX),
+     re.search(r"cuts a quadrotor's crash rate from (\d+)% to ([\d.]+)%; adding it leaves (\d+)%", HL)]
+tab = {name: re.search(r"\| " + re.escape(name) + r" \| ([\d.]+) \| ([\d.]+) \| ([\d.]+)[^|]*\| ([\d.]+|–) \| ([\d.]+) \|", README)
+       for name in ("Quadrotor (NeuroBEM), propeller fault", "Quadrotor, thrust-gain fault",
+                    "Quadrotor, propeller fault with look-alikes", "MuJoCo car, icy corner")}
+mr = [re.search(txt(r"\(([\d.]+)–([\d.]+)% crashes against ([\d.]+)–([\d.]+)%\)"), README),
+      re.search(txt(r"curation alone does not help \((\d+)–(\d+)% crashes\), and three failure runs help mostly as added training "
+                    r"data: ([\d.]+)% added alone, ([\d.]+)% curated and then added, ([\d.]+)% with the gradient-free score, and "
+                    r"([\d.]+)% added to the oracle's flights \(([\d.]+)% for the oracle alone, ([\d.]+)% unfixed\)"), README),
+      re.search(txt(r"takes (\d+) s with FACT \((\d+) s with as many updates as a full-data training\), (\d+) s with the "
+                    r"gradient-free score, (\d+) s for an ordinary training, and (\d+)–(\d+) s with learning to reweight implemented "
+                    r"efficiently \((\d+) s with per-sample gradients\)"), README)]
+if None in m or None in mr or None in tab.values():
+    print("  DIFF a sentence of the abstract, highlights.txt or the README was not found")
+    BAD.append("abstract/highlights/README text")
+else:
+    cells = [("abstract: unfixed propeller crash %", m[0].group(1), f"{PP['none']['crash']:.0f}"),
+             ("abstract: FACT from one crash dive, crash %", m[0].group(2), f1(PP["sign1"]["crash"])),
+             ("abstract: FACT from a supervisor's takeover, crash %", m[0].group(2), f1(PP["sup"]["crash"])),
+             ("abstract: robust fitting within", f"{m[0].group(3)}--{m[0].group(4)}",
+              f"{m[0].group(3)}--{m[0].group(4)}" if inside([PP["huber"]["crash"], PP["l1"]["crash"]], m[0].group(3), m[0].group(4))
+              else rng_([PP["huber"]["crash"], PP["l1"]["crash"]])),
+             ("abstract: the crash dive as data, crash %", f"{m[0].group(5)}--{m[0].group(6)}", rng_(as_data)),
+             ("abstract: learning to reweight on the thrust-gain fault %", f"{m[1].group(1)}--{m[1].group(2)}", rng_(l2rw_gain, 1)),
+             ("abstract: FACT on the thrust-gain fault %", m[1].group(3), f1(D["gain40j8"]["sign1"]["crash"])),
+             ("highlights: unfixed %", m[2].group(1), f"{PP['none']['crash']:.0f}"),
+             ("highlights: FACT %", m[2].group(2), f1(PP["sign1"]["crash"])),
+             ("highlights: adding the dive %", m[2].group(3), f"{PP['add1']['crash']:.0f}")]
+    for (name, mt), b in zip(list(tab.items())[:3], ("prop50j8", "gain40j8", "prop50j8m")):
+        for j, key in enumerate(("none", "add1", "sign1", "controls l2rw", "oracle")):
+            cells.append((f"README table: {name}, {key}", mt.group(j + 1), f1(D[b][key]["crash"])))
+    for j, key in enumerate(("faulty", "add 1 runs, W=20", "ours (sign-rule count) from 1 runs", None, "clean (bad logs removed)")):
+        if key:
+            cells.append((f"README table: car, {key}", tab["MuJoCo car, icy corner"].group(j + 1), f1(C[key]["crash"])))
+    gf = [R[("gradfree", b)]["crash"] for b, _ in BENCH]
+    fa = [R[("fact", b)]["crash"] for b, _ in BENCH]
+    cells += [("README: gradient-free score on the quadrotor %", f"{mr[0].group(1)}--{mr[0].group(2)}", rng_(gf, 1)),
+              ("README: FACT on the quadrotor, re-flown %", f"{mr[0].group(3)}--{mr[0].group(4)}", rng_(fa, 1)),
+              ("README: Crazyflie curation alone %", f"{mr[1].group(1)}--{mr[1].group(2)}",
+               rng_([F["ours from 1 dives, sign rule"]["crash"], F["ours from 3 dives, sign rule"]["crash"]]))]
+    for j, key in enumerate(("add 3 crash dives, W=20", "ours from 3 dives, sign rule, and add them (W=20)",
+                             "output-space from 3 dives, sign rule, and add them (W=20)", "oracle, and add 3 crash dives (W=20)",
+                             "oracle (flights below 3.35 V)", "faulty (all flights)")):
+        cells.append((f"README: Crazyflie {key} %", mr[1].group(j + 3), f1(F[key]["crash"])))
+    for j, key in enumerate(("fact", "fact_matched", "gradfree", "plain")):
+        cells.append((f"README: time, {key}, s", mr[2].group(j + 1), f"{TE[key]:.0f}"))
+    cells += [("README: time, learning to reweight (look-ahead, forward mode), s", f"{mr[2].group(5)}--{mr[2].group(6)}",
+               rng_([TE["l2rw_jvp"], TE["l2rw_la"]])),
+              ("README: time, learning to reweight per sample, s", mr[2].group(7), f"{TE['l2rw']:.0f}")]
+    for where, p, data in cells:
+        ok = p == data
+        print(("  ok   " if ok else "  DIFF ") + f"{where}: paper {p} data {data}")
+        if not ok:
+            BAD.append(where)
+
 print("\n" +(f"{len(BAD)} MISMATCHES: " + ", ".join(BAD) if BAD else "all checked numbers match the result files"))
 sys.exit(1 if BAD else 0)  # non-zero on any mismatch, so CI fails
