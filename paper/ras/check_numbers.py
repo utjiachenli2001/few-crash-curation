@@ -660,3 +660,4 @@ if not ok:
     BAD.append("tab:assume identity kernel")
 
 print("\n" +(f"{len(BAD)} MISMATCHES: " + ", ".join(BAD) if BAD else "all checked numbers match the result files"))
+sys.exit(1 if BAD else 0)  # non-zero on any mismatch, so CI fails
