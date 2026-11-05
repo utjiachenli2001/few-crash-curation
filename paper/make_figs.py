@@ -11,7 +11,10 @@ import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-plt.rcParams.update({"font.size": 8, "font.family": "STIXGeneral", "mathtext.fontset": "stix",
+# the same figures on every machine: start from Matplotlib's defaults rather than a local matplotlibrc, and render text
+# without hinting, as paper/figs/ was drawn (hinting moves glyphs by a pixel and changes text widths, hence the layout)
+plt.rcdefaults()
+plt.rcParams.update({"text.hinting": "no_hinting", "font.size": 8, "font.family": "STIXGeneral", "mathtext.fontset": "stix",
                      "axes.linewidth": 0.5, "axes.spines.top": False, "axes.spines.right": False,
                      "xtick.major.width": 0.5, "ytick.major.width": 0.5, "xtick.major.size": 2, "ytick.major.size": 2,
                      "axes.titlesize": 8, "legend.frameon": False, "pdf.fonttype": 42})
