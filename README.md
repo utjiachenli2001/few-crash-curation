@@ -78,6 +78,14 @@ pins the versions the results were produced with:
 pip install -r requirements.txt
 ```
 
+On Linux, that takes the CUDA build of PyTorch from PyPI, several GB. For the CPU build the results were produced with,
+install PyTorch from its CPU index before the requirements (the CPU build satisfies the pin, so pip keeps it):
+
+```
+pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements.txt
+```
+
 Raw data and fitted models are not in the repository (`.gitignore` excludes `*.npz` and `*.pt`); the scripts rebuild them.
 
 - **NeuroBEM** (Bauersfeld et al., RSS 2021): download the processed flights from
@@ -97,6 +105,9 @@ Run drone scripts from `code/drone/` (`python work/<script>.py ...`), car script
 scripts from `code/crazyflie/`. Each writes its JSON next to the script (`work/` for the drone); copy the files to
 `results/drone/`, `results/mujoco/` or `results/crazyflie/` to check them against the paper. Seeds are 1–5 unless
 noted; the look-alike benchmark (`prop50j8m`) and some sweep settings use 1–3.
+
+Crazyflie runs write `cf_3.1_eq_s<S>.json`, or `cf_3.1_eq_s<S>_<CF_TAG>.json` when `CF_TAG` is set; `check_numbers.py`
+pools every file of a seed, so the rows can be split over several tags, as they are in `results/crazyflie/`.
 
 Fault names: `prop50j8` propeller fault, `gain40j8` thrust-gain fault, `prop50j8m` propeller fault with look-alikes,
 `prop50mv` minority fault, `lag100j8` inconsistent majority fault (motor log 100 ms late). Every drone fault and seed
@@ -127,9 +138,11 @@ first needs its faulty and oracle models: `python work/nat_probe.py <fault> <see
 
 - `python paper/ras/check_numbers.py` recomputes, from `results/`, every number in Tables 1–4, 8 and 9 and Fig. 2 and
   the numbers quoted in the related work, Sections 4.2, 7.1–7.5 and 7.9 and Appendix B, and lists any that differ from
-  `paper/ras/main.tex`.
+  `paper/ras/main.tex` (exit status 1 if any do). It needs only NumPy and SciPy, not the raw data.
 - The `fill_*` scripts above rewrite Tables 5–7 from `results/drone/`; run on the current results they leave the paper
-  unchanged.
+  unchanged. `python paper/ras/check_tables.py` checks that, and that the `pool_*` scripts reproduce the pooled files in
+  `results/drone/`, by running them in a temporary copy (NumPy only; the repository is not touched).
+- Both checks run on every push and pull request (`.github/workflows/check.yml`).
 - `python paper/make_figs.py` redraws Figs. 2 and 3 from `results/`; Fig. 1 is drawn in the paper with TikZ.
 - Build with `pdflatex main && bibtex main && pdflatex main && pdflatex main` in `paper/ras/` (TeX Live with the
   `elsarticle` class). Then `python3 make_submission.py` writes `paper/ras/submission/` (and `submission.zip`): the
